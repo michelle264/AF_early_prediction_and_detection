@@ -1,0 +1,16 @@
+# Ignore everything by default
+/*
+
+# Keep these folders
+!af-prediction-dashboard/
+!model_backend/
+!.gitignore
+
+# Ignore large or unnecessary subfolders
+model_backend/Records/*
+!model_backend/Records/.gitkeep
+
+# Ignore node_modules and old backend folders
+node_modules/
+model_backend_latest/
+model_backend_old/
