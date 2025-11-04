@@ -1,22 +1,53 @@
 import { useState } from "react";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebase";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { auth, db } from "../firebase";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import heartImg from "../components/heart.jpg";
 
 export default function Register({ onRegister, onSwitchToLogin }) {
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [age, setAge] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
 
 const handleRegister = async (e) => {
   e.preventDefault();
+  // basic validation
+  if (!username || username.trim().length < 2) {
+    setError("Please enter a display name (at least 2 characters).");
+    return;
+  }
+  const ageNum = parseInt(age, 10);
+  if (!age || Number.isNaN(ageNum) || ageNum <= 0 || ageNum > 120) {
+    setError("Please enter a valid age.");
+    return;
+  }
   if (password !== confirmPassword) {
     setError("Passwords do not match");
     return;
   }
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    // set displayName
+    try {
+      await updateProfile(userCredential.user, { displayName: username });
+    } catch (updErr) {
+      console.warn("Failed to update profile displayName:", updErr);
+    }
+    // create Firestore user document
+    try {
+      await setDoc(doc(db, "users", userCredential.user.uid), {
+        uid: userCredential.user.uid,
+        email: email,
+        username: username,
+        age: ageNum,
+        createdAt: serverTimestamp(),
+      });
+    } catch (dbErr) {
+      console.warn("Failed to create user doc:", dbErr);
+    }
     onRegister(userCredential.user);
   } catch (err) {
     // Firebase error handling
@@ -49,12 +80,28 @@ const handleRegister = async (e) => {
         <div className="w-1/2 flex flex-col justify-center p-10">
           <div className="mb-8">
             <h1 className="text-4xl font-extrabold text-indigo-700 font-serif">
-              AFib Early Predictor
+              AFib Early Predictor & Detector
             </h1>
             <p className="text-lg text-gray-600 mt-2">Create Your Account ✨</p>
           </div>
 
           <form onSubmit={handleRegister} className="space-y-4">
+            <input
+              type="text"
+              placeholder="Display name"
+              className="w-full px-4 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+            <input
+              type="number"
+              placeholder="Age"
+              min={1}
+              max={120}
+              className="w-full px-4 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+              value={age}
+              onChange={(e) => setAge(e.target.value)}
+            />
             <input
               type="email"
               placeholder="Email"

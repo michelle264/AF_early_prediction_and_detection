@@ -5,13 +5,14 @@ import { collection, addDoc, query, where, onSnapshot } from "firebase/firestore
 
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
-import Upload from "./pages/UploadAnalysis";
+import Upload from "./pages/AF_early_prediction";
+import AFDetection from "./pages/AF_detection";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import './App.css';
 
 function App() {
-  const [page, setPage] = useState("login"); // "login" | "dashboard" | "upload"
+  const [page, setPage] = useState("login"); // "login" | "dashboard" | "prediction" | "detection"
   const [records, setRecords] = useState([]);
   const [user, setUser] = useState(null);
   const [showRegister, setShowRegister] = useState(false);
@@ -100,7 +101,8 @@ function App() {
             {page === "dashboard" && (
               <Dashboard records={records} />
             )}
-            {page === "upload" && <Upload user={user}/>}
+            {page === "prediction" && <Upload user={user}/>} 
+            {page === "detection" && <AFDetection user={user} />}
           </div>
         </>
       )}

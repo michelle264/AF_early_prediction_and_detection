@@ -1,4 +1,4 @@
-// src/pages/Dashboard.js
+import { useState } from "react";
 import { FaFileAlt, FaHeartbeat } from "react-icons/fa";
 import {
   LineChart,
@@ -10,131 +10,295 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-export default function Dashboard({ records }) {
-  // Take last 5 records for trend chart
-  const lastFive = records.slice(-5).map((r, i) => ({
+export default function DashboardOld({ records }) {
+  const [activeTab, setActiveTab] = useState("prediction");
+
+  // --- Separate Records ---
+  const predictionRecords = records.filter((r) => r.type === "prediction");
+  const detectionRecords = records.filter((r) => r.type === "detection");
+
+  // --- Sort by Date (Old → New) ---
+  const sortByDate = (a, b) => new Date(a.date) - new Date(b.date);
+  predictionRecords.sort(sortByDate);
+  detectionRecords.sort(sortByDate);
+
+  // --- Trend Data (use all records, not just 5) ---
+  const predictionTrendData = predictionRecords.map((r) => ({
     name: r.date,
     probability: r.probability,
   }));
 
+  // For detection trend we want a binary series (Yes=1, No=0)
+  const detectionTrendData = detectionRecords.map((r) => ({
+    name: r.date,
+    // prefer boolean af_detected; fallback to old checks
+    value: r.af_detected ? 1 : (r.risk === "Detected" || (r.probability && r.probability > 50) ? 1 : 0),
+  }));
+
   return (
     <div className="min-h-screen bg-gray-100 p-6">
-      {/* Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        {/* Total Records */}
-        <div className="bg-white shadow-xl rounded-xl p-6 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="p-4 bg-blue-100 text-blue-600 rounded-full">
-              <FaFileAlt size={28} />
-            </div>
-            <div>
-              <p className="text-gray-500 uppercase tracking-wide text-lg font-bold">
-                Uploaded Records
-              </p>
-            </div>
-          </div>
-          <p className="text-4xl font-extrabold text-blue-600">
-            {records.length}
-          </p>
-        </div>
-
-        {/* Number of Alert Cases */}
-        <div className="bg-white shadow-xl rounded-xl p-6 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="p-4 bg-red-100 text-red-600 rounded-full">
-              <FaHeartbeat size={28} />
-            </div>
-            <div>
-              <p className="text-gray-500 uppercase tracking-wide text-lg font-bold">
-                High Risk Cases
-              </p>
-            </div>
-          </div>
-          <p className="text-4xl font-extrabold text-red-500">
-            {records.filter((r) => r.risk === "High").length}
-          </p>
-        </div>
+      {/* Tabs */}
+      <div className="flex space-x-4 mb-6 border-b border-gray-300">
+        <button
+          onClick={() => setActiveTab("prediction")}
+          className={`px-6 py-2 font-semibold rounded-t-lg ${
+            activeTab === "prediction"
+              ? "bg-white text-blue-600 border-t-2 border-x-2 border-blue-600"
+              : "text-gray-500 hover:text-blue-400"
+          }`}
+        >
+          AF Early Prediction
+        </button>
+        <button
+          onClick={() => setActiveTab("detection")}
+          className={`px-6 py-2 font-semibold rounded-t-lg ${
+            activeTab === "detection"
+              ? "bg-white text-blue-600 border-t-2 border-x-2 border-blue-600"
+              : "text-gray-500 hover:text-blue-400"
+          }`}
+        >
+          AF Detection
+        </button>
       </div>
 
-      {/* Table as Card */}
-      <div className="bg-white shadow-xl rounded-xl p-6 mb-6">
-        <h2 className="text-gray-500 text-lg font-bold mb-4">Records</h2>
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b">
-              <th className="p-2">Date</th>
-              <th className="p-2">File</th>
-              <th className="p-2">Risk</th>
-              <th className="p-2">Probability of Danger</th>
-              {/* <th className="p-2">Predicted Time Horizon (Mins)</th> */}
+      {/* Tab Content */}
+      {activeTab === "prediction" ? (
+        <>
+          {/* --- Early Prediction --- */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <SummaryCard
+              icon={<FaFileAlt size={28} />}
+              label="Uploaded Records"
+              value={predictionRecords.length}
+              color="blue"
+            />
+            <SummaryCard
+              icon={<FaHeartbeat size={28} />}
+              label="High Risk Cases"
+              value={predictionRecords.filter((r) => r.risk === "High").length}
+              color="red"
+            />
+          </div>
+
+          {/* --- Table --- */}
+          <div className="bg-white shadow-xl rounded-xl p-6 mb-6">
+            <h2 className="text-gray-500 text-lg font-bold mb-4">
+              AF Early Prediction Records
+            </h2>
+            <PredictionTable records={predictionRecords} />
+          </div>
+
+          {/* --- Trend Chart --- */}
+          <TrendChart
+            title="Prediction Danger Trend (All Records)"
+            data={predictionTrendData}
+          />
+        </>
+      ) : (
+        <>
+          {/* --- AF Detection --- */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <SummaryCard
+              icon={<FaFileAlt size={28} />}
+              label="Uploaded Records"
+              value={detectionRecords.length}
+              color="blue"
+            />
+            <SummaryCard
+              icon={<FaHeartbeat size={28} />}
+              label="AF Detected"
+              value={detectionRecords.filter((r) => r.af_detected).length}
+              color="red"
+            />
+          </div>
+
+          {/* --- Table --- */}
+          <div className="bg-white shadow-xl rounded-xl p-6 mb-6">
+            <h2 className="text-gray-500 text-lg font-bold mb-4">
+              AF Detection Records
+            </h2>
+            <DetectionTable records={detectionRecords} />
+          </div>
+
+          {/* --- Trend Chart --- */}
+          <TrendChart
+            title="AF Detection Trend (All Records)"
+            data={detectionTrendData}
+            binary={true}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+/* --- Reusable Summary Card --- */
+function SummaryCard({ icon, label, value, color }) {
+  const colorClasses = {
+    blue: "bg-blue-100 text-blue-600",
+    red: "bg-red-100 text-red-600",
+  };
+  return (
+    <div className="bg-white shadow-xl rounded-xl p-6 flex items-center justify-between">
+      <div className="flex items-center space-x-4">
+        <div className={`p-4 rounded-full ${colorClasses[color]}`}>{icon}</div>
+        <p className="text-gray-500 uppercase tracking-wide text-lg font-bold">
+          {label}
+        </p>
+      </div>
+      <p
+        className={`text-4xl font-extrabold ${
+          color === "red" ? "text-red-500" : "text-blue-600"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+/* --- Early Prediction Table --- */
+function PredictionTable({ records }) {
+  return (
+    <table className="w-full text-left border-collapse">
+      <thead>
+        <tr className="border-b">
+          <th className="p-2">Date</th>
+          <th className="p-2">Record</th>
+          <th className="p-2">Risk</th>
+          <th className="p-2">Probability</th>
+        </tr>
+      </thead>
+      <tbody>
+        {records.length > 0 ? (
+          records.map((r) => (
+            <tr key={r.id} className="border-b hover:bg-gray-50">
+              <td className="p-2 text-gray-600">{r.date}</td>
+              <td className="p-2">{r.record_id}</td>
+              <td className="p-2 font-bold">
+                <span
+                  className={`px-2 py-1 rounded-full text-sm ${
+                    r.risk === "High"
+                      ? "bg-red-100 text-red-600"
+                      : r.risk === "Medium"
+                      ? "bg-yellow-100 text-yellow-600"
+                      : "bg-green-100 text-green-600"
+                  }`}
+                >
+                  {r.risk}
+                </span>
+              </td>
+              <td className="p-2">{r.probability}%</td>
             </tr>
-          </thead>
-          <tbody>
-            {records.length > 0 ? (
-              records.map((r) => (
-                <tr key={r.id} className="border-b hover:bg-gray-50">
-                  <td className="p-2 text-gray-600">{r.date}</td>
-                  <td className="p-2">{r.fileName}</td>
-                  <td className="p-2 font-bold">
-                    <span
-                      className={`px-2 py-1 rounded-full text-sm ${
-                        r.risk === "High"
-                          ? "bg-red-100 text-red-600"
-                          : r.risk === "Medium"
-                          ? "bg-yellow-100 text-yellow-600"
-                          : "bg-green-100 text-green-600"
-                      }`}
-                    >
-                      {r.risk}
-                    </span>
-                    {r.risk === "High" && (
-                      <span className="ml-2 px-2 py-1 bg-red-500 text-white text-xs font-bold rounded-full">
-                        ALERT
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-2">{r.probability}%</td>
-                  {/* <td className="p-2">{r.timeHorizon}</td> */}
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td className="p-4 text-gray-500" colSpan={5}>
-                  No records yet
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+          ))
+        ) : (
+          <tr>
+            <td className="p-4 text-gray-500" colSpan={4}>
+              No records yet
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
+}
 
-      {/* Risk Trend Card */}
-      <div className="bg-white shadow-xl rounded-xl p-6">
-        <h2 className="text-gray-500 text-lg font-bold mb-4">
-          Danger Trend (Last 5 Records)
-        </h2>
-        {lastFive.length > 0 ? (
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={lastFive}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
+/* --- Detection Table --- */
+function DetectionTable({ records }) {
+  return (
+    <table className="w-full text-left border-collapse">
+      <thead>
+        <tr className="border-b">
+          <th className="p-2">Date</th>
+          <th className="p-2">Record</th>
+          <th className="p-2">AF Detected?</th>
+        </tr>
+      </thead>
+      <tbody>
+        {records.length > 0 ? (
+          records.map((r) => (
+            <tr key={r.id} className="border-b hover:bg-gray-50">
+              <td className="p-2 text-gray-600">{r.date}</td>
+              <td className="p-2">{r.record_id}</td>
+              <td className="p-2 font-bold">
+                <span
+                  className={`px-2 py-1 rounded-full text-sm ${
+                    r.af_detected
+                      ? "bg-red-100 text-red-600"
+                      : "bg-green-100 text-green-600"
+                  }`}
+                >
+                  {r.af_detected ? "Yes" : "No"}
+                </span>
+              </td>
+            </tr>
+          ))
+        ) : (
+          <tr>
+            <td className="p-4 text-gray-500" colSpan={3}>
+              No records yet
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
+}
+
+/* --- Trend Chart --- */
+function TrendChart({ title, data, binary = false }) {
+  return (
+    <div className="bg-white shadow-xl rounded-xl p-6">
+      <h2 className="text-gray-500 text-lg font-bold mb-4">{title}</h2>
+      {data.length > 0 ? (
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
+              {binary ? (
+                // Binary chart: values are 0 or 1
+                <YAxis domain={[0, 1]} ticks={[0, 1]} tickFormatter={(t) => (t === 1 ? "Yes" : "No")} />
+              ) : (
                 <YAxis domain={[0, 100]} />
-                <Tooltip />
+              )}
+              <Tooltip
+                formatter={(value) =>
+                  binary ? [`${value === 1 ? "Yes" : "No"}`, "Is AF?"] : [`${value}%`, "Probability"]
+                }
+              />
+              {binary ? (
+                // render line with custom colored dots: red for Yes(1), green for No(0)
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  stroke="#374151"
+                  strokeWidth={2}
+                  dot={(props) => {
+                    const { cx, cy, payload } = props;
+                    if (cx == null || cy == null) return null;
+                    const fill = payload && payload.value === 1 ? "#ef4444" : "#10b981";
+                    return <circle cx={cx} cy={cy} r={6} fill={fill} stroke="none" />;
+                  }}
+                  activeDot={{ r: 8 }}
+                  isAnimationActive={false}
+                />
+              ) : (
                 <Line
                   type="monotone"
                   dataKey="probability"
                   stroke="#ef4444"
                   strokeWidth={3}
                   dot={{ r: 6 }}
+                  isAnimationActive={false}
                 />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <p className="text-gray-500">No data to display</p>
-        )}
-      </div>
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <p className="text-gray-500">No data to display</p>
+      )}
     </div>
   );
 }

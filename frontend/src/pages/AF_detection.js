@@ -1,0 +1,248 @@
+import { useState, useEffect } from "react";
+import { db, auth } from "../firebase";
+import { collection, addDoc } from "firebase/firestore";
+
+export default function AFDetection({ user }) {
+  const [metadataFile, setMetadataFile] = useState(null);
+  const [recordsZip, setRecordsZip] = useState(null);
+  const [decision, setDecision] = useState(null); // 'Yes' or 'No'
+  const [probabilities, setProbabilities] = useState([]);
+  const [recordId, setRecordId] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (decision === "Yes") {
+      new Notification("⚠️ AF Detected", {
+        body: "AF detected in uploaded records.",
+      });
+    }
+  }, [decision]);
+
+  const handleMetadataChange = (e) => {
+    const file = e.target.files[0];
+    if (file && file.name.toLowerCase().endsWith(".csv")) {
+      setMetadataFile(file);
+    } else {
+      alert("Please upload a valid metadata.csv file!");
+      setMetadataFile(null);
+    }
+  };
+
+  const handleRecordsZipChange = (e) => {
+    const file = e.target.files[0];
+    if (file && file.name.toLowerCase().endsWith(".zip")) {
+      setRecordsZip(file);
+    } else {
+      alert("Please upload a valid records ZIP file!");
+      setRecordsZip(null);
+    }
+  };
+
+  const handleDetect = async () => {
+    if (!metadataFile || !recordsZip) {
+      alert("Please select both metadata.csv and record ZIP file!");
+      return;
+    }
+
+    setLoading(true);
+    setDecision(null);
+    setProbabilities([]);
+
+    const formData = new FormData();
+    formData.append("metadata_file", metadataFile);
+    formData.append("records_zip", recordsZip);
+
+    try {
+      const response = await fetch("http://localhost:8000/detect/", {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) throw new Error("API error");
+      const data = await response.json();
+
+      // API returns { record_ids: [...], prob_af: [...], mean_predicted_time_horizon?: number }
+      const probs = data.prob_af || [];
+      setProbabilities(probs.map((p) => Math.round(p * 100)));
+
+      // Capture returned record id — try several common key names and normalize to a single id
+      const ridRaw = data.record_ids || data.recordIds || data.record_id || data.recordId || null;
+      const rid = Array.isArray(ridRaw) ? (ridRaw.length > 0 ? ridRaw[0] : null) : ridRaw || null;
+      setRecordId(rid);
+
+  // Decision rule: if any record has prob > 0.5 -> Yes, else No (strict)
+  const anyHigh = probs.some((p) => p > 0.5);
+      setDecision(anyHigh ? "Yes" : "No");
+    } catch (err) {
+      console.error("Error detecting AF:", err);
+      alert("Failed to detect AF. Check backend and file format.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!metadataFile || !recordsZip || !decision) {
+      return alert("Please complete detection before saving!");
+    }
+
+    // compute mean probability (percent) from displayed percentages
+    const meanPercent = probabilities.length
+      ? Math.round(probabilities.reduce((a, b) => a + b, 0) / probabilities.length)
+      : null;
+
+    // map to risk labels consistent with early prediction page
+    const meanFraction = meanPercent !== null ? meanPercent / 100 : 0;
+
+  const record = {
+      date: new Date().toLocaleString(),
+      // keep both file name fields for compatibility with other pages
+      metadataFileName: metadataFile.name,
+      recordsZipName: recordsZip.name,
+      fileName: recordsZip.name,
+      record_id: typeof recordId === "undefined" ? null : recordId,
+      type: "detection",
+      probability: meanPercent,
+      af_detected: decision === "Yes",
+      probabilities: probabilities,
+      userId: auth?.currentUser?.uid || user?.uid || null,
+      createdAt: new Date().toISOString(),
+    };
+
+    console.log("------------recordId:", recordId);
+
+    try {
+      await addDoc(collection(db, "records"), record);
+      alert("✅ Detection saved successfully!");
+      setMetadataFile(null);
+      setRecordsZip(null);
+      setDecision(null);
+      setProbabilities([]);
+    } catch (err) {
+      console.error("Error saving detection: ", err);
+      alert("❌ Failed to save detection. Check console for details.");
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-center py-10 px-6">
+      <div className="bg-white shadow-2xl rounded-3xl p-10 w-full max-w-5xl transition-all">
+        <h2 className="text-2xl font-bold mb-8 text-center text-gray-800">AFib Detection</h2>
+
+         {/* Instruction Box */}
+        <div className="bg-blue-50 p-4 rounded-lg text-sm text-gray-700 leading-relaxed">
+          <p className="font-semibold mb-1">📘 Input Instructions</p>
+          <p>
+          <strong>metadata.csv</strong> — Must include columns: <code>patient_id</code>, <code>patient_sex</code>, <code>patient_age</code>, <code>record_id</code>, <code>record_date</code>, <code>record_start_time</code>, <code>record_end_time</code>, <code>record_timedelta</code>, <code>record_files</code>, <code>record_seconds</code>, <code>record_samples</code>.
+        </p>
+          <p><strong>records.zip</strong> — Contains:</p>
+          <ul className="list-disc pl-6 mt-1 space-y-1">
+            <li><code>record_*_rr_*.h5</code>: RR interval data (HDF5 format, automatic QRS annotations by Microport Syneview)</li>
+            <li><code>record_*_rr_labels_*.csv</code>: RR interval annotations (<code>start_file_index</code>, <code>start_rr_index</code>, <code>end_file_index</code>, <code>end_rr_index</code>)</li>
+          </ul>
+          <p className="mt-1">The <code>*</code> corresponds to the same record ID as in <code>metadata.csv</code> (e.g. <code>record_000_rr_labels_000.h5</code>).</p>
+        </div>
+
+        <div className="space-y-4 mt-4">
+          <div>
+              <p className="text-sm font-semibold text-gray-700 mb-1 mt-4">
+                Upload Files
+              </p>
+              <div className="bg-gray-50 p-4 rounded-lg shadow-inner">
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  metadata.csv
+                </label>
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleMetadataChange}
+                  className="block w-full text-gray-700 text-sm mb-3"
+                />
+
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  records.zip
+                </label>
+                <input
+                  type="file"
+                  accept=".zip"
+                  onChange={handleRecordsZipChange}
+                  className="block w-full text-gray-700 text-sm"
+                />
+              </div>
+            </div>
+
+          <div className="flex justify-center">
+          <button
+            onClick={handleDetect}
+            disabled={loading}
+            className={`mt-4 px-6 py-2 text-white text-sm font-medium rounded-lg shadow-md transition ${
+              loading ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+            }`}
+          >
+            {loading ? (
+              <span className="flex items-center">
+                <svg
+                  className="animate-spin h-5 w-5 mr-2 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v8z"
+                  ></path>
+                </svg>
+                Loading...
+              </span>
+            ) : (
+              "Submit"
+            )}
+          </button>
+        </div>
+
+
+          {decision && !loading && (
+            <div className="bg-gray-50 rounded-xl shadow-lg p-6 mt-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">AF Detected?</h3>
+                <span className={`px-3 py-1 rounded-full text-xs font-bold ${decision === "Yes" ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600"}`}>
+                  {decision}
+                </span>
+              </div>
+
+              <div className="bg-white p-4 rounded-lg shadow flex flex-col items-center justify-center">
+                <p className="text-sm text-gray-500 mb-1">Decision</p>
+                <p className={`text-3xl font-bold ${decision === "Yes" ? "text-red-600" : "text-green-600"}`}>{decision}</p>
+              </div>
+
+              {/* <p className="text-gray-700 mt-4 text-center">This page returns a simple Yes/No decision. Threshold used: 0.5 (>= 0.5 → Yes).</p> */}
+
+              {/* <div className="mt-4">
+                <p className="text-sm font-medium text-gray-700 mb-2">Per-record probabilities (percent):</p>
+                <div className="flex flex-wrap gap-2">
+                  {probabilities.length > 0 ? probabilities.map((p, i) => (
+                    <span key={i} className="px-3 py-1 bg-gray-100 rounded-md text-sm">{p}%</span>
+                  )) : <span className="text-sm text-gray-500">No probabilities returned</span>}
+                </div>
+              </div> */}
+
+              <div className="flex justify-center">
+                <button onClick={handleSave} className="px-5 py-2 mt-5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg shadow-md transition">Save Detection</button>
+              </div>
+            </div>
+          )}
+
+        </div>
+
+      </div>
+    </div>
+  );
+}
