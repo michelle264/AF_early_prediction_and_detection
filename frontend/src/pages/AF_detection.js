@@ -90,9 +90,6 @@ export default function AFDetection({ user }) {
       ? Math.round(probabilities.reduce((a, b) => a + b, 0) / probabilities.length)
       : null;
 
-    // map to risk labels consistent with early prediction page
-    const meanFraction = meanPercent !== null ? meanPercent / 100 : 0;
-
   const record = {
       date: new Date().toLocaleString(),
       // keep both file name fields for compatibility with other pages

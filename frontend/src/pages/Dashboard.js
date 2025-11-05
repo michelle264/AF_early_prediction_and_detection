@@ -31,7 +31,6 @@ export default function DashboardOld({ records }) {
   // For detection trend we want a binary series (Yes=1, No=0)
   const detectionTrendData = detectionRecords.map((r) => ({
     name: r.date,
-    // prefer boolean af_detected; fallback to old checks
     value: r.af_detected ? 1 : (r.risk === "Detected" || (r.probability && r.probability > 50) ? 1 : 0),
   }));
 
@@ -166,7 +165,7 @@ function PredictionTable({ records }) {
           <th className="p-2">Date</th>
           <th className="p-2">Record</th>
           <th className="p-2">Risk</th>
-          <th className="p-2">Probability</th>
+          <th className="p-2">Probability of Danger</th>
         </tr>
       </thead>
       <tbody>
@@ -254,8 +253,23 @@ function TrendChart({ title, data, binary = false }) {
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+             <XAxis
+              dataKey="name"
+              type="category"
+              allowDuplicatedCategory={false}
+              interval={0}
+              tick={({ x, y, payload }) => {
+                const parts = payload.value.split(","); // e.g. ["2025-11-05", "10:00"]
+                return (
+                  <text x={x} y={y + 10} textAnchor="middle" fill="#555" fontSize={13}>
+                    <tspan x={x} dy="0">{parts[0]}</tspan>
+                    {parts[1] && <tspan x={x} dy="12">{parts[1]}</tspan>}
+                  </text>
+                );
+              }}
+              padding={{ left: 0, right: 28 }}
+            />
               {binary ? (
                 // Binary chart: values are 0 or 1
                 <YAxis domain={[0, 1]} ticks={[0, 1]} tickFormatter={(t) => (t === 1 ? "Yes" : "No")} />
@@ -264,11 +278,10 @@ function TrendChart({ title, data, binary = false }) {
               )}
               <Tooltip
                 formatter={(value) =>
-                  binary ? [`${value === 1 ? "Yes" : "No"}`, "Is AF?"] : [`${value}%`, "Probability"]
+                  binary ? [`${value === 1 ? "Yes" : "No"}`, "Is AF?"] : [`${value}%`, "Prob of danger"]
                 }
               />
               {binary ? (
-                // render line with custom colored dots: red for Yes(1), green for No(0)
                 <Line
                   type="monotone"
                   dataKey="value"
@@ -285,13 +298,33 @@ function TrendChart({ title, data, binary = false }) {
                 />
               ) : (
                 <Line
-                  type="monotone"
-                  dataKey="probability"
-                  stroke="#ef4444"
-                  strokeWidth={3}
-                  dot={{ r: 6 }}
-                  isAnimationActive={false}
-                />
+                type="monotone"
+                dataKey="probability"
+                stroke="#ef4444"
+                strokeWidth={3}
+                dot={({ cx, cy, payload }) =>
+                  cx && cy && (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={6}
+                      fill={payload.probability >= 50 ? "#ef4444" : "#10b981"} // red if ≥50%, green otherwise
+                    />
+                  )
+                }
+                activeDot={({ cx, cy, payload }) =>
+                  cx && cy && (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={8}
+                      fill={payload.probability >= 50 ? "#ef4444" : "#10b981"}
+                    />
+                  )
+                }
+                isAnimationActive={false}
+              />
+
               )}
             </LineChart>
           </ResponsiveContainer>
