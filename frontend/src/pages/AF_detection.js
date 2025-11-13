@@ -9,6 +9,8 @@ export default function AFDetection({ user }) {
   const [probabilities, setProbabilities] = useState([]);
   const [recordId, setRecordId] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+
 
   useEffect(() => {
     if (decision === "Yes") {
@@ -69,9 +71,10 @@ export default function AFDetection({ user }) {
       const rid = Array.isArray(ridRaw) ? (ridRaw.length > 0 ? ridRaw[0] : null) : ridRaw || null;
       setRecordId(rid);
 
-  // Decision rule: if any record has prob > 0.5 -> Yes, else No (strict)
+  // Decision rule: if any record has prob > 0.5 -> Yes, else No
   const anyHigh = probs.some((p) => p > 0.5);
       setDecision(anyHigh ? "Yes" : "No");
+      if (anyHigh) setShowModal(true);
     } catch (err) {
       console.error("Error detecting AF:", err);
       alert("Failed to detect AF. Check backend and file format.");
@@ -92,7 +95,6 @@ export default function AFDetection({ user }) {
 
   const record = {
       date: new Date().toLocaleString(),
-      // keep both file name fields for compatibility with other pages
       metadataFileName: metadataFile.name,
       recordsZipName: recordsZip.name,
       fileName: recordsZip.name,
@@ -131,7 +133,7 @@ export default function AFDetection({ user }) {
           <p>
           <strong>metadata.csv</strong> — Must include columns: <code>patient_id</code>, <code>patient_sex</code>, <code>patient_age</code>, <code>record_id</code>, <code>record_date</code>, <code>record_start_time</code>, <code>record_end_time</code>, <code>record_timedelta</code>, <code>record_files</code>, <code>record_seconds</code>, <code>record_samples</code>.
         </p>
-          <p><strong>records.zip</strong> — Contains:</p>
+          <p><strong>record.zip</strong> — Contains:</p>
           <ul className="list-disc pl-6 mt-1 space-y-1">
             <li><code>record_*_rr_*.h5</code>: RR interval data (HDF5 format, automatic QRS annotations by Microport Syneview)</li>
             <li><code>record_*_rr_labels_*.csv</code>: RR interval annotations (<code>start_file_index</code>, <code>start_rr_index</code>, <code>end_file_index</code>, <code>end_rr_index</code>)</li>
@@ -156,7 +158,7 @@ export default function AFDetection({ user }) {
                 />
 
                 <label className="block text-sm font-medium text-gray-600 mb-1">
-                  records.zip
+                  record.zip
                 </label>
                 <input
                   type="file"
@@ -217,19 +219,45 @@ export default function AFDetection({ user }) {
 
               <div className="bg-white p-4 rounded-lg shadow flex flex-col items-center justify-center">
                 <p className="text-sm text-gray-500 mb-1">Decision</p>
-                <p className={`text-3xl font-bold ${decision === "Yes" ? "text-red-600" : "text-green-600"}`}>{decision}</p>
+                <p
+                  className={`text-3xl font-bold ${
+                    decision === "Yes" ? "text-red-600" : "text-green-600"
+                  }`}
+                >
+                  {decision}
+                </p>
+
+                {probabilities.length > 0 && (
+                  <div
+                    className={`mt-5 px-5 py-3 rounded-lg w-full max-w-md ${
+                      decision === "Yes" ? "bg-red-50" : "bg-green-50"
+                    }`}
+                  >
+                    <p
+                      className={`font-semibold text-base ${
+                        decision === "Yes" ? "text-red-700" : "text-green-700"
+                      }`}
+                    >
+                      Your estimated probability of AF is{" "}
+                      <span className="text-2xl font-bold">
+                        {Math.round(
+                          probabilities.reduce((a, b) => a + b, 0) / probabilities.length
+                        )}
+                        % !!
+                      </span>
+                    </p>
+                    <p
+                      className={`mt-1 font-semibold ${
+                        decision === "Yes" ? "text-red-700" : "text-green-700"
+                      }`}
+                    >
+                      {decision === "Yes"
+                        ? "AF is likely present in your uploaded records."
+                        : "No AF detected in your uploaded records."}
+                    </p>
+                  </div>
+                )}
               </div>
-
-              {/* <p className="text-gray-700 mt-4 text-center">This page returns a simple Yes/No decision. Threshold used: 0.5 (>= 0.5 → Yes).</p> */}
-
-              {/* <div className="mt-4">
-                <p className="text-sm font-medium text-gray-700 mb-2">Per-record probabilities (percent):</p>
-                <div className="flex flex-wrap gap-2">
-                  {probabilities.length > 0 ? probabilities.map((p, i) => (
-                    <span key={i} className="px-3 py-1 bg-gray-100 rounded-md text-sm">{p}%</span>
-                  )) : <span className="text-sm text-gray-500">No probabilities returned</span>}
-                </div>
-              </div> */}
 
               <div className="flex justify-center">
                 <button onClick={handleSave} className="px-5 py-2 mt-5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg shadow-md transition">Save Detection</button>
@@ -240,6 +268,29 @@ export default function AFDetection({ user }) {
         </div>
 
       </div>
+       {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md text-center transform transition-all scale-100 hover:scale-105">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">⚠️ AF Detected</h2>
+            <p className="text-gray-700 mb-4">
+              Your uploaded records indicate a high probability of Atrial Fibrillation (AF).
+            </p>
+            <p className="text-lg font-semibold text-red-700 mb-6">
+              Probability of AF:{" "}
+              {Math.round(
+                probabilities.reduce((a, b) => a + b, 0) / probabilities.length
+              )}
+              %
+            </p>
+            <button
+              onClick={() => setShowModal(false)}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

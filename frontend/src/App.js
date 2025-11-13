@@ -11,40 +11,42 @@ import Profile from "./pages/Profile";
 import EditProfile from "./pages/EditProfile";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Homepage from "./pages/Homepage";
 
 function App() {
-  const [page, setPage] = useState("login");
+  const [page, setPage] = useState("home");
   const [records, setRecords] = useState([]);
   const [user, setUser] = useState(null);
   const [showRegister, setShowRegister] = useState(false);
 
-  useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        setPage("dashboard");
+useEffect(() => {
+  const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+    setUser(currentUser);
 
-        const q = query(
-          collection(db, "records"),
-          where("userId", "==", currentUser.uid)
-        );
-        const unsubscribeRecords = onSnapshot(q, (snapshot) => {
-          const data = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-          setRecords(data);
-        });
+    if (currentUser) {
+      setPage("dashboard"); // go to dashboard when logged in
 
-        return () => unsubscribeRecords();
-      } else {
-        setPage("login");
-        setRecords([]);
-      }
-    });
+      const q = query(
+        collection(db, "records"),
+        where("userId", "==", currentUser.uid)
+      );
+      const unsubscribeRecords = onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setRecords(data);
+      });
 
-    return () => unsubscribeAuth();
-  }, []);
+      return () => unsubscribeRecords();
+    } else {
+      setUser(null);
+      setRecords([]);
+    }
+  });
+
+  return () => unsubscribeAuth();
+}, []);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -54,41 +56,46 @@ function App() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      {/* Auth pages */}
-      {showRegister ? (
-        <Register
-          onRegister={() => setShowRegister(false)}
-          onSwitchToLogin={() => setShowRegister(false)}
-        />
-      ) : page === "login" ? (
-        <Login
-          onLogin={(loggedInUser) => {
-            setUser(loggedInUser);
-            setPage("dashboard");
-          }}
-          onSwitchToRegister={() => setShowRegister(true)}
-        />
-      ) : (
-        <>
-          {/* ✅ Sidebar gets onNavigate */}
-          <Sidebar
-            onNavigate={setPage}
-            activePage={page}
-            onLogout={handleLogout}
-          />
+  <div className="flex min-h-screen bg-gray-100">
+    {!user && page === "home" && (
+      <Homepage onNavigateToLogin={() => setPage("login")} />
+    )}
 
-          <div className="flex-1 p-6">
-            {page === "dashboard" && <Dashboard records={records} />}
-            {page === "prediction" && <Upload user={user} />}
-            {page === "detection" && <AFDetection user={user} />}
-            {page === "profile" && <Profile onNavigate={setPage} />}
-            {page === "editProfile" && <EditProfile onNavigate={setPage} />}
-          </div>
-        </>
-      )}
-    </div>
-  );
+    {!user && page === "login" && (
+      <Login
+        onLogin={(loggedInUser) => {
+          setUser(loggedInUser);
+          setPage("dashboard");
+        }}
+        onSwitchToRegister={() => setShowRegister(true)}
+      />
+    )}
+
+    {showRegister && (
+      <Register
+        onRegister={() => setShowRegister(false)}
+        onSwitchToLogin={() => setShowRegister(false)}
+      />
+    )}
+
+    {/* --- When logged in --- */}
+    {user && (
+      <>
+        <Sidebar
+          onNavigate={setPage}
+          activePage={page}
+          onLogout={handleLogout}
+        />
+        <div className="flex-1 p-6">
+          {page === "dashboard" && <Dashboard records={records} />}
+          {page === "prediction" && <Upload user={user} />}
+          {page === "detection" && <AFDetection user={user} />}
+          {page === "profile" && <Profile onNavigate={setPage} />}
+          {page === "editProfile" && <EditProfile onNavigate={setPage} />}
+        </div>
+      </>
+    )}
+  </div>
+);
 }
-
 export default App;

@@ -12,7 +12,7 @@ export default function UploadAnalysis({ user }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (risk === "High") {
+    if (risk === "Risky") {
       new Notification("⚠️ High AFib Risk Detected!", {
         body: "Probability of danger is high. Please consult a clinician immediately.",
       });
@@ -67,18 +67,18 @@ export default function UploadAnalysis({ user }) {
         // If backend returns an array, take the first element; otherwise use the value directly
         setRecordId(Array.isArray(rid) ? (rid.length > 0 ? rid[0] : null) : rid || null);
 
-      const meanProb =
-        data.prob_danger && data.prob_danger.length > 0
-          ? data.prob_danger.reduce((a, b) => a + b, 0) /
-            data.prob_danger.length
-          : null;
+      let p95Prob = null;
+      if (data.prob_danger && data.prob_danger.length > 0) {
+        const sorted = [...data.prob_danger].sort((a, b) => a - b);
+        const idx = Math.floor(0.95 * (sorted.length - 1));
+        p95Prob = sorted[idx];
+      }
 
-      setProbability(meanProb !== null ? Math.round(meanProb * 100) : null);
+      setProbability(p95Prob !== null ? Math.round(p95Prob * 100) : null);
 
-      if (meanProb !== null) {
-        if (meanProb > 0.52) setRisk("High");
-        else if (meanProb >= 0.45) setRisk("Moderate");
-        else setRisk("Low");
+      if (p95Prob !== null) {
+        if (p95Prob > 0.45) setRisk("Risky");
+        else setRisk("Safe");
       }
     } catch (err) {
       console.error("Error analyzing file:", err);
@@ -135,7 +135,7 @@ export default function UploadAnalysis({ user }) {
           <p>
           <strong>metadata.csv</strong> — Must include columns: <code>patient_id</code>, <code>patient_sex</code>, <code>patient_age</code>, <code>record_id</code>, <code>record_date</code>, <code>record_start_time</code>, <code>record_end_time</code>, <code>record_timedelta</code>, <code>record_files</code>, <code>record_seconds</code>, <code>record_samples</code>.
         </p>
-          <p><strong>records.zip</strong> — Contains:</p>
+          <p><strong>record.zip</strong> — Contains:</p>
           <ul className="list-disc pl-6 mt-1 space-y-1">
             <li><code>record_*_rr_*.h5</code>: RR interval data (HDF5 format, automatic QRS annotations by Microport Syneview)</li>
             <li><code>record_*_rr_labels_*.csv</code>: RR interval annotations (<code>start_file_index</code>, <code>start_rr_index</code>, <code>end_file_index</code>, <code>end_rr_index</code>)</li>
@@ -161,7 +161,7 @@ export default function UploadAnalysis({ user }) {
                 />
 
                 <label className="block text-sm font-medium text-gray-600 mb-1">
-                  records.zip
+                  record.zip
                 </label>
                 <input
                   type="file"
@@ -216,10 +216,8 @@ export default function UploadAnalysis({ user }) {
                 <h3 className="text-lg font-semibold text-gray-800">Result</h3>
                 <span
                   className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
-                    risk === "High"
+                    risk === "Risky"
                       ? "bg-red-100 text-red-600"
-                      : risk === "Moderate"
-                      ? "bg-yellow-100 text-yellow-600"
                       : "bg-green-100 text-green-600"
                   }`}
                 >
@@ -233,11 +231,7 @@ export default function UploadAnalysis({ user }) {
                 </p>
                 <p
                   className={`text-3xl font-bold ${
-                    risk === "High"
-                      ? "text-red-600"
-                      : risk === "Moderate"
-                      ? "text-yellow-600"
-                      : "text-green-600"
+                    risk === "Risky" ? "text-red-600" : "text-green-600"
                   }`}
                 >
                   {probability}%
@@ -245,13 +239,10 @@ export default function UploadAnalysis({ user }) {
               </div>
 
               <p className="text-gray-700 mt-4 text-center">
-                {risk === "High"
+                {risk === "Risky"
                   ? "⚠️ Probability of danger is high. Please consult a clinician immediately."
-                  : risk === "Moderate"
-                  ? "Slightly elevated risk. Consider regular monitoring or consulting a doctor if symptoms appear."
-                  : "Normal risk detected. Keep maintaining a healthy lifestyle."}
+                  : "Normal pattern detected. Keep maintaining a healthy lifestyle."}
               </p>
-
               <div className="flex justify-center">
                 <button
                   onClick={handleSave}
@@ -279,6 +270,13 @@ export default function UploadAnalysis({ user }) {
             <h2 className="text-2xl font-bold text-red-600 mb-4">
               ⚠️ High AFib Risk Detected!
             </h2>
+            <p className="text-gray-800 text-lg font-semibold mb-2">
+              Your estimated probability of danger is{" "}
+              <span className="text-red-600 font-bold text-2xl">
+                {probability}%
+              </span>
+              .
+            </p>
             <p className="text-gray-700 mb-6">
               Probability of danger is high. Please consult a clinician immediately.
             </p>

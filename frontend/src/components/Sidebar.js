@@ -40,7 +40,7 @@ export default function Sidebar({ onNavigate, activePage, onLogout }) {
   }, []);
 
   return (
-    <div className="w-64 bg-gray-800 text-white flex flex-col overflow-y-auto">
+    <div className="w-64 bg-gray-800 text-white flex flex-col overflow-y-auto font-[Poppins]">
       {/* Profile Section */}
       <div className="flex flex-col items-center text-center p-6 border-b border-gray-700 bg-gray-900">
         {photoURL ? (

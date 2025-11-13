@@ -10,7 +10,6 @@ body,
   padding: 0;
 }
 
-
 .App-logo {
   height: 40vmin;
   pointer-events: none;
@@ -58,4 +57,11 @@ body,
   font-size: 16px;
 }
 
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+h1, h2, h3, .font-heading {
+  font-family: 'Poppins', sans-serif;
+}
 
