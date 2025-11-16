@@ -23,16 +23,32 @@ class Record:
         self.metadata = RecordMetadata(*metadata_record)
 
         self.record_folder = record_folder
-        self.num_days = len(list(self.record_folder.glob("*ecg_*.h5")))
 
+        # discover rr and ecg files
         self.rr_files = sorted(self.record_folder.glob("*rr_*.h5"))
-        assert len(self.rr_files) == self.num_days
+        self.ecg_files = sorted(self.record_folder.glob("*ecg_*.h5"))
+
+        # require rr files to exist; if ECG files are missing, tolerate it and proceed using rr_files
+        if len(self.rr_files) == 0:
+            raise AssertionError(f"No RR files found for record folder: {self.record_folder}")
+
+        if len(self.ecg_files) == 0:
+            # no ECG files found -> warn and set num_days by RR files
+            print(f"Warning: no ECG files found for {self.record_folder}; proceeding without ECG (using RR files only).")
+            self.num_days = len(self.rr_files)
+        else:
+            # prefer ecg count as canonical number of days; ensure RR files match
+            self.num_days = len(self.ecg_files)
+            if len(self.rr_files) != self.num_days:
+                raise AssertionError(
+                    f"Mismatch between RR files ({len(self.rr_files)}) and ECG files ({len(self.ecg_files)}) in {self.record_folder}"
+                )
+
+        # placeholders
         self.rr = None
         self.rr_labels_df = None
         self.rr_labels = None
 
-        self.ecg_files = sorted(self.record_folder.glob("*ecg_*.h5"))
-        assert len(self.ecg_files) == self.num_days
         self.ecg = None
         self.ecg_labels_df = None
         self.ecg_labels = None

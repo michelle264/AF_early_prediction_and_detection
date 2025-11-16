@@ -1,16 +1,23 @@
 # Ignore everything by default
 /*
 
-# Keep these folders
-!af-prediction-dashboard/
+# Keep main folders
+!frontend/
 !model_backend/
+
+# Keep git files
 !.gitignore
+!.gitattributes
 
-# Ignore large or unnecessary subfolders
+# Inside model_backend, ignore everything first
+model_backend/*
+
+# Re-include all subfolders
+!model_backend/**/
+
+# Ignore Records contents
 model_backend/Records/*
-!model_backend/Records/.gitkeep
 
-# Ignore node_modules and old backend folders
-node_modules/
-model_backend_latest/
-model_backend_old/
+# But keep a .gitkeep file inside Records
+!model_backend/Records/.gitkeep
+# 
