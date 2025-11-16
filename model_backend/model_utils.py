@@ -109,7 +109,7 @@ def preprocess_data_records(metadata_path, records_dir, window_size=50, step_siz
 
     # --- Add record limit here ---
     if record_limit is not None:
-        metadata_df = metadata_df.head(record_limit)
+        metadata_df = metadata_df.tail(record_limit)
         print(f"[INFO] Limiting to first {record_limit} records for processing.")
 
     feature_rows = []
