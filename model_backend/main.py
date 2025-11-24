@@ -8,7 +8,7 @@ import torch
 import numpy as np
 import shutil
 from fastapi.middleware.cors import CORSMiddleware
-from model_utils import load_model, preprocess_data, predict_probabilities, compute_mean_predicted_time_horizon, NODEModel
+from model_utils import load_model, preprocess_data, predict_probabilities, compute_mean_predicted_time_horizon, NODEModel, compute_rr_features
 
 app = FastAPI()
 
@@ -72,7 +72,7 @@ async def predict(
                 shutil.move(os.path.join(records_dir, file), record_subdir)
 
         # --- Preprocessing ---
-        X, record_ids = preprocess_data(metadata_path, records_dir)
+        X, record_ids, raw_rr_dict = preprocess_data(metadata_path, records_dir)
         X = X / 1000.0
 
         # --- Model inference ---
@@ -87,24 +87,29 @@ async def predict(
             "prob_danger": prob_danger
         })
 
-        # --- Aggregate per record using 95th percentile (instead of mean) ---
         agg_probs = (
             df.groupby("record_id")["prob_danger"]
-            .quantile(0.95)  # <-- p95 instead of mean
+            .quantile(0.75)  
             .reset_index()
-            .rename(columns={"prob_danger": "p95_prob_danger"})
+            .rename(columns={"prob_danger": "p75_prob_danger"})
         )
 
         # --- Compute mean predicted time horizon with threshold = 0.45 ---
         mean_predicted_time_horizon = compute_mean_predicted_time_horizon(
             record_ids, prob_danger, threshold=0.45, window_duration_sec=30
         )
+        
+        rr_features = {}
+
+        for rid, rri in raw_rr_dict.items():
+            rr_features[rid] = compute_rr_features(rri)
 
         # --- Build response ---
         response = {
             "record_id": agg_probs["record_id"].tolist(),
-            "prob_danger": agg_probs["p95_prob_danger"].tolist(),
+            "prob_danger": agg_probs["p75_prob_danger"].tolist(),
             "mean_predicted_time_horizon": mean_predicted_time_horizon,
+            "rr_features": rr_features,
         }
 
         return response

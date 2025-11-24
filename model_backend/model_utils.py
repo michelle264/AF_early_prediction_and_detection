@@ -56,35 +56,50 @@ def phase_space_reconstruct(x, m=3, tau=2):
 
 def preprocess_data(metadata_path, records_dir, window_size=50, step_size=5, m=3, tau=2):
     """
-    For each record in metadata.csv, segment RRI into overlapping windows, extract PSR features for each window.
-    Returns X (features for all windows), record_ids (one per window).
+    Process each record: load raw RRI, build overlapping windows, generate PSR features.
+    Returns:
+        X            → all window feature vectors
+        record_ids   → record id for each window
+        raw_rr       → dict: {record_id: full RRI array}
     """
     import traceback
     metadata_df = pd.read_csv(metadata_path)
+
     feature_rows = []
     record_ids = []
+    raw_rr = {}  
 
     for record_id in metadata_df["record_id"]:
         try:
             record = create_record(record_id, metadata_df, records_dir)
             record.load_rr_record()
+
+            # Full RRI series
             rri = np.concatenate(record.rr)
+            raw_rr[record_id] = rri  
+
             n = len(rri)
+
             # Sliding window segmentation
             for start in range(0, n - window_size + 1, step_size):
                 end = start + window_size
                 window = rri[start:end]
+
+                # Padding if needed
                 if len(window) < window_size:
                     window = np.pad(window, (0, window_size - len(window)), 'constant')
+
                 psr = phase_space_reconstruct(window, m=m, tau=tau)
                 feature_rows.append(psr)
                 record_ids.append(record_id)
-            # If record is too short, pad and add one window
+
+            # If record is too short, add exactly one padded window
             if n < window_size:
                 window = np.pad(rri, (0, window_size - n), 'constant')
                 psr = phase_space_reconstruct(window, m=m, tau=tau)
                 feature_rows.append(psr)
                 record_ids.append(record_id)
+
         except Exception as e:
             print(f"Skipping record {record_id}: {e}")
             traceback.print_exc()
@@ -95,7 +110,8 @@ def preprocess_data(metadata_path, records_dir, window_size=50, step_size=5, m=3
 
     X = np.stack(feature_rows).astype(np.float32)
     record_ids = np.array(record_ids)
-    return X, record_ids
+
+    return X, record_ids, raw_rr  
 
 def preprocess_data_records(metadata_path, records_dir, window_size=50, step_size=5, m=3, tau=2, record_limit=None):
     """
@@ -109,7 +125,7 @@ def preprocess_data_records(metadata_path, records_dir, window_size=50, step_siz
 
     # --- Add record limit here ---
     if record_limit is not None:
-        metadata_df = metadata_df.tail(record_limit)
+        metadata_df = metadata_df.head(record_limit)
         print(f"[INFO] Limiting to first {record_limit} records for processing.")
 
     feature_rows = []
@@ -184,3 +200,23 @@ def load_model(model_class, model_path, *args, **kwargs):
     model.load_state_dict(state_dict)
     model.eval()
     return model
+
+def compute_rr_features(rr):
+    rr = np.array(rr)
+    diff = np.diff(rr)
+
+    mean_rr = np.mean(rr)
+    sdnn = np.std(rr)
+    rmssd = np.sqrt(np.mean(diff**2))
+    cvrr = sdnn / mean_rr
+    pnn20 = np.mean(np.abs(diff) > 20)
+    pnn50 = np.mean(np.abs(diff) > 50)
+
+    return {
+        "mean_rr": float(mean_rr),
+        "sdnn": float(sdnn),
+        "rmssd": float(rmssd),
+        "cvrr": float(cvrr),
+        "pnn20": float(pnn20),
+        "pnn50": float(pnn50),
+    }

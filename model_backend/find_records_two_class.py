@@ -17,7 +17,7 @@ MODEL_PATH = "Two_Class_Models/saved_models/NODE_PSR_two_class_best.pth"
 INPUT_DIM = 138
 NUM_CLASSES = 2
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-BATCH_SIZE = 1024  # reduce to 512 or 256 if memory still runs out
+BATCH_SIZE = 1024
 
 print('Using:')
 print(' METADATA_PATH ->', METADATA_PATH)
@@ -36,13 +36,13 @@ print('Preprocessing data (this may take a while)...')
 X, aligned_record_ids = preprocess_data_records(METADATA_PATH, RECORDS_PATH, record_limit=30)
 print('Preprocess done. X shape =', getattr(X, 'shape', None))
 
-# Apply same scaling as /detect/
+# Scale input
 try:
     X = X / 1000.0
 except Exception:
     pass
 
-# --- Safe batch prediction ---
+# Batch prediction
 print('Running model predictions in batches...')
 import torch.nn.functional as F
 
@@ -62,30 +62,49 @@ rec_probs = defaultdict(list)
 for i, rid in enumerate(aligned_record_ids):
     rec_probs[rid].append(float(probs[i, 1]))
 
+# ---- Compute summary using MAX ----
 summary = []
 for rid, vals in rec_probs.items():
     arr = np.array(vals)
-    summary.append((rid, int(len(arr)), float(arr.mean()), float(arr.max()), int((arr > 0.5).sum())))
+
+    max_prob = float(arr.max())       # <--- USE MAX HERE
+    mean_prob = float(arr.mean())
+    p95_prob = float(np.percentile(arr, 95))
+    count_above = int((arr > 0.5).sum())
+
+    summary.append((rid, len(arr), max_prob, mean_prob, p95_prob, count_above))
+
+# ---- Threshold for MAX ----
+THRESHOLD = 0.68     # adjust if needed
+
+safe_records = [r for r in summary if r[2] < THRESHOLD]
+danger_records = [r for r in summary if r[2] >= THRESHOLD]
 
 # Save CSV
-csv_path = BASE / 'demo_record_scores.csv'
+csv_path = BASE / 'demo_record_scores_max.csv'
 with open(csv_path, 'w', newline='') as f:
     writer = csv.writer(f)
-    writer.writerow(['record_id', 'n_windows', 'mean_prob_af', 'max_prob_af', 'count_above_0.5'])
+    writer.writerow(['record_id', 'n_windows', 'max_prob', 'mean_prob', 'p95_prob', 'count_above_0.5'])
     for row in summary:
         writer.writerow(row)
 
-# Sort and print top/bottom
-top_by_max = sorted(summary, key=lambda x: x[3], reverse=True)[-30:]
-bottom_by_max = sorted(summary, key=lambda x: x[3])[:30]
+# Print results
+print(f"\nTotal records: {len(summary)}")
+print(f"Safe records  (<{THRESHOLD} max): {len(safe_records)}")
+print(f"Danger records (≥{THRESHOLD} max): {len(danger_records)}")
 
-print('\nTop 30 by max AF probability:')
-for r in top_by_max:
+print("\n--- Some safe records ---")
+for r in sorted(safe_records, key=lambda x: x[2])[:10]:
     print(r)
 
-print('\nBottom 30 by max AF probability:')
-for r in bottom_by_max:
+print("\n--- Some dangerous records ---")
+for r in sorted(danger_records, key=lambda x: x[2], reverse=True)[:10]:
     print(r)
+
+# Print ALL max values
+print("\n=== ALL RECORD MAX VALUES ===")
+for r in sorted(summary, key=lambda x: x[2], reverse=True):
+    print(f"{r[0]} → max = {r[2]:.4f}")
 
 print('\nSaved CSV to', csv_path)
 print('Done.')
