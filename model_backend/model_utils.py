@@ -3,10 +3,12 @@ import pandas as pd
 import torch
 from Dataset_preparation.record import Record, create_record
 
-# --- Model classes for NODE ---
 import torch.nn as nn
 import torch.nn.functional as F
 from torchdiffeq import odeint
+
+from pydantic import BaseModel
+from typing import Dict, Optional
 
 class ODEFunc(nn.Module):
     def __init__(self, dim):
@@ -209,14 +211,21 @@ def compute_rr_features(rr):
     sdnn = np.std(rr)
     rmssd = np.sqrt(np.mean(diff**2))
     cvrr = sdnn / mean_rr
-    pnn20 = np.mean(np.abs(diff) > 20)
-    pnn50 = np.mean(np.abs(diff) > 50)
+    # pnn20 = np.mean(np.abs(diff) > 20)
+    # pnn50 = np.mean(np.abs(diff) > 50)
 
     return {
         "mean_rr": float(mean_rr),
         "sdnn": float(sdnn),
         "rmssd": float(rmssd),
         "cvrr": float(cvrr),
-        "pnn20": float(pnn20),
-        "pnn50": float(pnn50),
+        # "pnn20": float(pnn20),
+        # "pnn50": float(pnn50),
     }
+
+class ReportRequest(BaseModel):
+    record_id: str
+    decision: str
+    prob_af: float
+    rr_features: Dict[str, float]
+    timestamp: Optional[str] = None

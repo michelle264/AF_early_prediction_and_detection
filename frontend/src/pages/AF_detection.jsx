@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
 import { collection, addDoc } from "firebase/firestore";
+import {
+  RRFeaturesCard,
+  RRSummaryBlock,
+  interpretRRFeatures,
+  LoadingModal,
+  GenerateReportButton
+} from "../components/AFInterpretationUtils";
+
 
 export default function AFDetection({ user }) {
   const [metadataFile, setMetadataFile] = useState(null);
@@ -10,8 +18,8 @@ export default function AFDetection({ user }) {
   const [recordId, setRecordId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [rrFeatures, setRrFeatures] = useState(null);
 
-  // ⭐ NEW: Rotating step display
   const steps = [
     "Extracting RR intervals…",
     "Segmenting heartbeat windows…",
@@ -21,7 +29,6 @@ export default function AFDetection({ user }) {
   ];
   const [stepIndex, setStepIndex] = useState(0);
 
-  // ⭐ NEW: Rotate step every 1.8 sec
   useEffect(() => {
     if (loading) {
       const interval = setInterval(() => {
@@ -81,6 +88,12 @@ export default function AFDetection({ user }) {
       if (!response.ok) throw new Error("API error");
       const data = await response.json();
 
+      if (data.rr_features) {
+        const rid = Object.keys(data.rr_features)[0];
+        setRecordId(rid);
+        setRrFeatures(data.rr_features[rid]);
+      }
+
       const probs = data.prob_af || [];
       setProbabilities(probs.map((p) => Math.round(p * 100)));
 
@@ -98,7 +111,7 @@ export default function AFDetection({ user }) {
         : ridRaw || null;
       setRecordId(rid);
 
-      const anyHigh = probs.some((p) => p > 0.5);
+      const anyHigh = probs.some((p) => p > 0.65);
       setDecision(anyHigh ? "Yes" : "No");
       if (anyHigh) setShowModal(true);
     } catch (err) {
@@ -116,8 +129,8 @@ export default function AFDetection({ user }) {
 
     const meanPercent = probabilities.length
       ? Math.round(
-          probabilities.reduce((a, b) => a + b, 0) / probabilities.length
-        )
+        probabilities.reduce((a, b) => a + b, 0) / probabilities.length
+      )
       : null;
 
     const record = {
@@ -137,27 +150,64 @@ export default function AFDetection({ user }) {
     try {
       await addDoc(collection(db, "records"), record);
       alert("✅ Detection saved successfully!");
-      setMetadataFile(null);
-      setRecordsZip(null);
-      setDecision(null);
-      setProbabilities([]);
     } catch (err) {
       console.error("Error saving detection: ", err);
       alert("❌ Failed to save detection. Check console for details.");
     }
   };
 
-return (
+  const handleGenerateReport = async () => {
+    if (!recordId || !decision || !rrFeatures) {
+      return alert("You must run detection before generating a report.");
+    }
+
+    const payload = {
+      record_id: recordId,
+      decision,
+      prob_af: Math.round(probabilities.reduce((a, b) => a + b, 0) / probabilities.length),
+      rr_features: rrFeatures,
+      timestamp: new Date().toLocaleString()
+    };
+
+    try {
+      const response = await fetch("http://localhost:8000/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) throw new Error("Failed to generate report");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `AF_Report_${recordId}.pdf`;
+      a.click();
+
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("Error generating report.");
+    }
+  };
+
+  const { probText, meanRRText, sdnnText, rmssdText, cvrrText } =
+    rrFeatures
+      ? interpretRRFeatures(rrFeatures, probabilities)
+      : {};
+
+  return (
     <div className="flex items-center justify-center py-10 px-6">
       <div className="bg-white shadow-2xl rounded-3xl p-10 w-full max-w-5xl transition-all">
         <h2 className="text-2xl font-bold mb-8 text-center text-gray-800">AFib Detection</h2>
 
-         {/* Instruction Box */}
         <div className="bg-blue-50 p-4 rounded-lg text-sm text-gray-700 leading-relaxed">
           <p className="font-semibold mb-1">📘 Input Instructions</p>
           <p>
-          <strong>metadata.csv</strong> — Must include columns: <code>patient_id</code>, <code>patient_sex</code>, <code>patient_age</code>, <code>record_id</code>, <code>record_date</code>, <code>record_start_time</code>, <code>record_end_time</code>, <code>record_timedelta</code>, <code>record_files</code>, <code>record_seconds</code>, <code>record_samples</code>.
-        </p>
+            <strong>metadata.csv</strong> — Must include columns: <code>patient_id</code>, <code>patient_sex</code>, <code>patient_age</code>, <code>record_id</code>, <code>record_date</code>, <code>record_start_time</code>, <code>record_end_time</code>, <code>record_timedelta</code>, <code>record_files</code>, <code>record_seconds</code>, <code>record_samples</code>.
+          </p>
           <p><strong>record.zip</strong> — Contains:</p>
           <ul className="list-disc pl-6 mt-1 space-y-1">
             <li><code>record_*_rr_*.h5</code>: RR interval data (HDF5 format, automatic QRS annotations by Microport Syneview)</li>
@@ -168,69 +218,68 @@ return (
 
         <div className="space-y-4 mt-4">
           <div>
-              <p className="text-sm font-semibold text-gray-700 mb-1 mt-4">
-                Upload Files
-              </p>
-              <div className="bg-gray-50 p-4 rounded-lg shadow-inner">
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  metadata.csv
-                </label>
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleMetadataChange}
-                  className="block w-full text-gray-700 text-sm mb-3"
-                />
+            <p className="text-sm font-semibold text-gray-700 mb-1 mt-4">
+              Upload Files
+            </p>
+            <div className="bg-gray-50 p-4 rounded-lg shadow-inner">
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                metadata.csv
+              </label>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleMetadataChange}
+                className="block w-full text-gray-700 text-sm mb-3"
+              />
 
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  record.zip
-                </label>
-                <input
-                  type="file"
-                  accept=".zip"
-                  onChange={handleRecordsZipChange}
-                  className="block w-full text-gray-700 text-sm"
-                />
-              </div>
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                record.zip
+              </label>
+              <input
+                type="file"
+                accept=".zip"
+                onChange={handleRecordsZipChange}
+                className="block w-full text-gray-700 text-sm"
+              />
             </div>
+          </div>
 
           <div className="flex justify-center">
-          <button
-            onClick={handleDetect}
-            disabled={loading}
-            className={`mt-4 px-6 py-2 text-white text-sm font-medium rounded-lg shadow-md transition ${
-              loading ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
-            }`}
-          >
-            {loading ? (
-              <span className="flex items-center">
-                <svg
-                  className="animate-spin h-5 w-5 mr-2 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8v8z"
-                  ></path>
-                </svg>
-                Loading...
-              </span>
-            ) : (
-              "Submit"
-            )}
-          </button>
-        </div>
+            <button
+              onClick={handleDetect}
+              disabled={loading}
+              className={`mt-4 px-6 py-2 text-white text-sm font-medium rounded-lg shadow-md transition ${loading ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+                }`}
+            >
+              {loading ? (
+                <span className="flex items-center">
+                  <svg
+                    className="animate-spin h-5 w-5 mr-2 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v8z"
+                    ></path>
+                  </svg>
+                  Loading...
+                </span>
+              ) : (
+                "Submit"
+              )}
+            </button>
+          </div>
 
 
           {decision && !loading && (
@@ -245,23 +294,20 @@ return (
               <div className="bg-white p-4 rounded-lg shadow flex flex-col items-center justify-center">
                 <p className="text-sm text-gray-500 mb-1">Decision</p>
                 <p
-                  className={`text-3xl font-bold ${
-                    decision === "Yes" ? "text-red-600" : "text-green-600"
-                  }`}
+                  className={`text-3xl font-bold ${decision === "Yes" ? "text-red-600" : "text-green-600"
+                    }`}
                 >
                   {decision}
                 </p>
 
                 {probabilities.length > 0 && (
                   <div
-                    className={`mt-5 px-5 py-3 rounded-lg w-full max-w-md ${
-                      decision === "Yes" ? "bg-red-50" : "bg-green-50"
-                    }`}
+                    className={`mt-5 px-5 py-3 rounded-lg w-full max-w-md ${decision === "Yes" ? "bg-red-50" : "bg-green-50"
+                      }`}
                   >
                     <p
-                      className={`font-semibold text-base ${
-                        decision === "Yes" ? "text-red-700" : "text-green-700"
-                      }`}
+                      className={`font-semibold text-base ${decision === "Yes" ? "text-red-700" : "text-green-700"
+                        }`}
                     >
                       Your estimated probability of AF is{" "}
                       <span className="text-2xl font-bold">
@@ -272,9 +318,8 @@ return (
                       </span>
                     </p>
                     <p
-                      className={`mt-1 font-semibold ${
-                        decision === "Yes" ? "text-red-700" : "text-green-700"
-                      }`}
+                      className={`mt-1 font-semibold ${decision === "Yes" ? "text-red-700" : "text-green-700"
+                        }`}
                     >
                       {decision === "Yes"
                         ? "AF is likely present in your uploaded records."
@@ -282,10 +327,19 @@ return (
                     </p>
                   </div>
                 )}
+                <RRFeaturesCard rr={rrFeatures} />
+                <RRSummaryBlock
+                  probText={probText}
+                  meanRRText={meanRRText}
+                  sdnnText={sdnnText}
+                  rmssdText={rmssdText}
+                  cvrrText={cvrrText}
+                />
+                {rrFeatures && <GenerateReportButton onGenerate={handleGenerateReport} />}
               </div>
 
               <div className="flex justify-center">
-                <button onClick={handleSave} className="px-5 py-2 mt-5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg shadow-md transition">Save Detection</button>
+                <button onClick={handleSave} className="px-5 py-2 mt-5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg shadow-md transition">Save Record</button>
               </div>
             </div>
           )}
@@ -293,7 +347,7 @@ return (
         </div>
 
       </div>
-       {showModal && (
+      {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md text-center transform transition-all scale-100 hover:scale-105">
             <h2 className="text-2xl font-bold text-red-600 mb-4">⚠️ AF Detected</h2>
@@ -316,34 +370,12 @@ return (
           </div>
         </div>
       )}
-        {loading && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50 backdrop-blur-sm">
-          <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center animate-fade-in">
-            <button
-                onClick={() => setLoading(false)}
-                className="absolute top-3 right-5 text-gray-500 hover:text-gray-700 text-xl font-bold"
-            >
-                ×
-            </button>
-            <div className="mb-4 flex justify-center">
-              <div className="h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-
-            <h2 className="text-xl font-bold text-gray-900 mb-2">
-              Processing Your ECG…
-            </h2>
-
-            <p className="text-gray-600 text-sm mb-4">
-              This may take <strong>10–20 seconds</strong>.
-              Please do not close the page.
-            </p>
-
-            <p className="text-blue-600 font-semibold animate-pulse">
-              {steps[stepIndex]}
-            </p>
-          </div>
-        </div>
-      )}
+      <LoadingModal
+        visible={loading}
+        steps={steps}
+        stepIndex={stepIndex}
+        onClose={() => setLoading(false)}
+      />
     </div>
   );
 }

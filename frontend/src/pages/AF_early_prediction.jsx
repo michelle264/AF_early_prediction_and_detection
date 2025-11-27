@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
 import { collection, addDoc } from "firebase/firestore";
+import {
+  RRFeaturesCard,
+  RRSummaryBlock,
+  interpretRRFeatures,
+  LoadingModal,
+  GenerateReportButton
+} from "../components/AFInterpretationUtils";
+
 
 export default function UploadAnalysis({ user }) {
   const [metadataFile, setMetadataFile] = useState(null);
@@ -10,26 +18,27 @@ export default function UploadAnalysis({ user }) {
   const [recordId, setRecordId] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [rrFeatures, setRrFeatures] = useState(null);
 
   const steps = [
-  "Extracting RR intervals…",
-  "Processing metadata…",
-  "Segmenting heartbeat windows…",
-  "Applying phase-space reconstruction…",
-  "Running Neural ODE model…",
-  "Finalizing risk score…",
-];
-const [stepIndex, setStepIndex] = useState(0);
+    "Extracting RR intervals…",
+    "Processing metadata…",
+    "Segmenting heartbeat windows…",
+    "Applying phase-space reconstruction…",
+    "Running Neural ODE model…",
+    "Finalizing risk score…",
+  ];
+  const [stepIndex, setStepIndex] = useState(0);
 
-// Rotate steps
-useEffect(() => {
-  if (loading) {
-    const interval = setInterval(() => {
-      setStepIndex((prev) => (prev + 1) % steps.length);
-    }, 1800);
-    return () => clearInterval(interval);
-  }
-}, [loading]);
+  // Rotate steps
+  useEffect(() => {
+    if (loading) {
+      const interval = setInterval(() => {
+        setStepIndex((prev) => (prev + 1) % steps.length);
+      }, 1800);
+      return () => clearInterval(interval);
+    }
+  }, [loading]);
 
   useEffect(() => {
     if (risk === "Risky") {
@@ -81,12 +90,11 @@ useEffect(() => {
       });
       if (!response.ok) throw new Error("API error");
       const data = await response.json();
-
-        // Try several common names for record id array returned by backend
-        const rid = data.record_ids || data.recordIds || data.record_id || data.recordId || null;
-        // If backend returns an array, take the first element; otherwise use the value directly
-        setRecordId(Array.isArray(rid) ? (rid.length > 0 ? rid[0] : null) : rid || null);
-
+      if (data.rr_features) {
+        const rid = Object.keys(data.rr_features)[0];
+        setRecordId(rid);
+        setRrFeatures(data.rr_features[rid]);
+      }
       let p95Prob = null;
       if (data.prob_danger && data.prob_danger.length > 0) {
         const sorted = [...data.prob_danger].sort((a, b) => a - b);
@@ -97,7 +105,7 @@ useEffect(() => {
       setProbability(p95Prob !== null ? Math.round(p95Prob * 100) : null);
 
       if (p95Prob !== null) {
-        if (p95Prob > 0.45) setRisk("Risky");
+        if (p95Prob > 0.53) setRisk("Risky");
         else setRisk("Safe");
       }
     } catch (err) {
@@ -120,8 +128,8 @@ useEffect(() => {
       metadataFileName: metadataFile.name,
       recordsZipName: recordsZip.name,
       type: "prediction",
-  // include backend primary record id when available
-  record_id: typeof recordId === "undefined" ? null : recordId,
+      // include backend primary record id when available
+      record_id: typeof recordId === "undefined" ? null : recordId,
       risk,
       probability,
       // Prefer auth.currentUser.uid to avoid undefined userId; fallback to prop
@@ -132,15 +140,52 @@ useEffect(() => {
     try {
       await addDoc(collection(db, "records"), record);
       alert("✅ Record saved successfully!");
-      setMetadataFile(null);
-      setRecordsZip(null);
-      setRisk(null);
-      setProbability(null);
     } catch (err) {
       console.error("Error saving record: ", err);
       alert("❌ Failed to save record. Check console for details.");
     }
   };
+
+
+  const handleGenerateReport = async () => {
+    if (!recordId || !risk || !rrFeatures) {
+      return alert("You must run detection before generating a report.");
+    }
+
+    const payload = {
+      record_id: recordId,
+      decision: risk,
+      prob_af: probability,
+      rr_features: rrFeatures,
+      timestamp: new Date().toLocaleString()
+    };
+
+    try {
+      const response = await fetch("http://localhost:8000/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) throw new Error("Failed to generate report");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `AF_Report_${recordId}.pdf`;
+      a.click();
+
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("Error generating report.");
+    }
+  };
+
+  const { probText, meanRRText, sdnnText, rmssdText, cvrrText } =
+    rrFeatures ? interpretRRFeatures(rrFeatures, probability) : {};
 
   return (
     <div className="flex items-center justify-center py-10 px-6">
@@ -153,8 +198,8 @@ useEffect(() => {
         <div className="bg-blue-50 p-4 rounded-lg text-sm text-gray-700 leading-relaxed">
           <p className="font-semibold mb-1">📘 Input Instructions</p>
           <p>
-          <strong>metadata.csv</strong> — Must include columns: <code>patient_id</code>, <code>patient_sex</code>, <code>patient_age</code>, <code>record_id</code>, <code>record_date</code>, <code>record_start_time</code>, <code>record_end_time</code>, <code>record_timedelta</code>, <code>record_files</code>, <code>record_seconds</code>, <code>record_samples</code>.
-        </p>
+            <strong>metadata.csv</strong> — Must include columns: <code>patient_id</code>, <code>patient_sex</code>, <code>patient_age</code>, <code>record_id</code>, <code>record_date</code>, <code>record_start_time</code>, <code>record_end_time</code>, <code>record_timedelta</code>, <code>record_files</code>, <code>record_seconds</code>, <code>record_samples</code>.
+          </p>
           <p><strong>record.zip</strong> — Contains:</p>
           <ul className="list-disc pl-6 mt-1 space-y-1">
             <li><code>record_*_rr_*.h5</code>: RR interval data (HDF5 format, automatic QRS annotations by Microport Syneview)</li>
@@ -163,36 +208,36 @@ useEffect(() => {
           <p className="mt-1">The <code>*</code> corresponds to the same record ID as in <code>metadata.csv</code> (e.g. <code>record_000_rr_labels_000.h5</code>).</p>
         </div>
 
-          {/* Upload */}
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm font-semibold text-gray-700 mb-1 mt-4">
-                Upload Files
-              </p>
-              <div className="bg-gray-50 p-4 rounded-lg shadow-inner">
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  metadata.csv
-                </label>
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleMetadataChange}
-                  className="block w-full text-gray-700 text-sm mb-3"
-                />
+        {/* Upload */}
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-semibold text-gray-700 mb-1 mt-4">
+              Upload Files
+            </p>
+            <div className="bg-gray-50 p-4 rounded-lg shadow-inner">
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                metadata.csv
+              </label>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleMetadataChange}
+                className="block w-full text-gray-700 text-sm mb-3"
+              />
 
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  record.zip
-                </label>
-                <input
-                  type="file"
-                  accept=".zip"
-                  onChange={handleRecordsZipChange}
-                  className="block w-full text-gray-700 text-sm"
-                />
-              </div>
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                record.zip
+              </label>
+              <input
+                type="file"
+                accept=".zip"
+                onChange={handleRecordsZipChange}
+                className="block w-full text-gray-700 text-sm"
+              />
             </div>
+          </div>
 
-            {/*Analyze */}
+          {/*Analyze */}
           <div className="flex justify-center">
             <button
               onClick={handleAnalyze}
@@ -235,11 +280,10 @@ useEffect(() => {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-800">Result</h3>
                 <span
-                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
-                    risk === "Risky"
-                      ? "bg-red-100 text-red-600"
-                      : "bg-green-100 text-green-600"
-                  }`}
+                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${risk === "Risky"
+                    ? "bg-red-100 text-red-600"
+                    : "bg-green-100 text-green-600"
+                    }`}
                 >
                   {risk}
                 </span>
@@ -250,9 +294,8 @@ useEffect(() => {
                   Probability of Danger
                 </p>
                 <p
-                  className={`text-3xl font-bold ${
-                    risk === "Risky" ? "text-red-600" : "text-green-600"
-                  }`}
+                  className={`text-3xl font-bold ${risk === "Risky" ? "text-red-600" : "text-green-600"
+                    }`}
                 >
                   {probability}%
                 </p>
@@ -263,6 +306,20 @@ useEffect(() => {
                   ? "⚠️ Probability of danger is high. Please consult a clinician immediately."
                   : "Normal pattern detected. Keep maintaining a healthy lifestyle."}
               </p>
+
+              {rrFeatures && <RRFeaturesCard rr={rrFeatures} />}
+              {rrFeatures && (
+                <RRSummaryBlock
+                  probText={probText}
+                  meanRRText={meanRRText}
+                  sdnnText={sdnnText}
+                  rmssdText={rmssdText}
+                  cvrrText={cvrrText}
+                />
+              )}
+              {rrFeatures && (
+                <GenerateReportButton onGenerate={handleGenerateReport} />
+              )}
               <div className="flex justify-center">
                 <button
                   onClick={handleSave}
@@ -271,6 +328,7 @@ useEffect(() => {
                   Save Record
                 </button>
               </div>
+
             </div>
           )}
 
@@ -281,6 +339,8 @@ useEffect(() => {
             diagnosis.
           </p>
         </div>
+
+
       </div>
 
       {/* Modal for High Risk */}
@@ -309,37 +369,12 @@ useEffect(() => {
           </div>
         </div>
       )}
-      {loading && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50 backdrop-blur-sm">
-          <div className="relative bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center animate-fade-in">
-
-            {/* Close Button */}
-            <button
-              onClick={() => setLoading(false)}
-              className="absolute top-3 right-5 text-gray-500 hover:text-gray-700 text-xl font-bold"
-            >
-              ×
-            </button>
-
-            <div className="mb-4 flex justify-center">
-              <div className="h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-
-            <h2 className="text-xl font-bold text-gray-900 mb-2">
-              Analyzing Your ECG…
-            </h2>
-
-            <p className="text-gray-600 text-sm mb-4">
-              This may take <strong>10–20 seconds</strong>.<br />
-              Please do not close the page.
-            </p>
-
-            <p className="text-blue-600 font-semibold animate-pulse">
-              {steps[stepIndex]}
-            </p>
-          </div>
-        </div>
-      )}
+      <LoadingModal
+        visible={loading}
+        steps={steps}
+        stepIndex={stepIndex}
+        onClose={() => setLoading(false)}
+      />
     </div>
   );
 }
