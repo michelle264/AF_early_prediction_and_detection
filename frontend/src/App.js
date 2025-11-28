@@ -78,7 +78,6 @@ useEffect(() => {
       />
     )}
 
-    {/* --- When logged in --- */}
     {user && (
       <>
         <Sidebar

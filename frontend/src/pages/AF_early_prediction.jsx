@@ -110,7 +110,7 @@ export default function UploadAnalysis({ user }) {
       }
     } catch (err) {
       console.error("Error analyzing file:", err);
-      alert("Failed to analyze file. Check backend and file format.");
+      alert("Prediction failed. Please try again.");
     } finally {
       setLoading(false);
     }
