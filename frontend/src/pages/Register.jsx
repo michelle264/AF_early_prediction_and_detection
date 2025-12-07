@@ -105,7 +105,7 @@ export default function Register({ onRegister, onSwitchToLogin }) {
         <div className="w-1/2 flex flex-col justify-center p-10">
           <div className="mb-8">
             <h1 className="text-4xl font-extrabold text-indigo-700 font-serif">
-              AFib Early Predictor & Detector
+              AF Early Predictor & Detector
             </h1>
             <p className="text-lg text-gray-600 mt-2">Create Your Account ✨</p>
           </div>

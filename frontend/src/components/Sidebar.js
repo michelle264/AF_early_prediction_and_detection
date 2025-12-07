@@ -91,7 +91,7 @@ export default function Sidebar({ onNavigate, activePage, onLogout }) {
           }`}
         >
           <FaUpload size={18} />
-          <span>AF Early Prediction</span>
+          <span>Early AF Prediction</span>
         </button>
 
         <button

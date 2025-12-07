@@ -6,9 +6,9 @@ import {
   RRSummaryBlock,
   interpretRRFeatures,
   LoadingModal,
-  GenerateReportButton
-} from "../components/AFInterpretationUtils";
-
+  GenerateReportButton,
+  StatusModal
+} from "../components/Utils";
 
 export default function UploadAnalysis({ user }) {
   const [metadataFile, setMetadataFile] = useState(null);
@@ -19,6 +19,8 @@ export default function UploadAnalysis({ user }) {
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [rrFeatures, setRrFeatures] = useState(null);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
   const steps = [
     "Extracting RR intervals…",
@@ -53,8 +55,9 @@ export default function UploadAnalysis({ user }) {
     const file = e.target.files[0];
     if (file && file.name.toLowerCase().endsWith(".csv")) {
       setMetadataFile(file);
+      setErrorMsg("");
     } else {
-      alert("Please upload a valid metadata.csv file!");
+      setErrorMsg("Please upload a valid metadata.csv file!");
       setMetadataFile(null);
     }
   };
@@ -63,21 +66,24 @@ export default function UploadAnalysis({ user }) {
     const file = e.target.files[0];
     if (file && file.name.toLowerCase().endsWith(".zip")) {
       setRecordsZip(file);
+      setErrorMsg("");
     } else {
-      alert("Please upload a valid records ZIP file!");
+      setErrorMsg("Please upload a valid records ZIP file!");
       setRecordsZip(null);
     }
   };
 
   const handleAnalyze = async () => {
     if (!metadataFile || !recordsZip) {
-      alert("Please select both metadata.csv and record ZIP file!");
+      setErrorMsg("Please select both metadata.csv and record ZIP file!");
       return;
     }
 
     setLoading(true);
     setRisk(null);
     setProbability(null);
+    setRecordId(null);
+    setRrFeatures(null);
 
     const formData = new FormData();
     formData.append("metadata_file", metadataFile);
@@ -89,28 +95,37 @@ export default function UploadAnalysis({ user }) {
         body: formData,
       });
       if (!response.ok) throw new Error("API error");
+
       const data = await response.json();
-      if (data.rr_features) {
-        const rid = Object.keys(data.rr_features)[0];
+
+      const rid = data.record_id?.[0] || null;
+      if (rid) {
         setRecordId(rid);
-        setRrFeatures(data.rr_features[rid]);
+        if (data.rr_features && data.rr_features[rid]) {
+          setRrFeatures(data.rr_features[rid]);
+        }
       }
-      let p95Prob = null;
-      if (data.prob_danger && data.prob_danger.length > 0) {
+
+      let p75 = null;
+      if (Array.isArray(data.prob_danger) && data.prob_danger.length > 0) {
         const sorted = [...data.prob_danger].sort((a, b) => a - b);
-        const idx = Math.floor(0.95 * (sorted.length - 1));
-        p95Prob = sorted[idx];
+        const idx = Math.floor(0.75 * (sorted.length - 1));
+        p75 = sorted[idx];
       }
 
-      setProbability(p95Prob !== null ? Math.round(p95Prob * 100) : null);
+      if (p75 !== null) {
+        const probPercent = Math.round(p75 * 100);
+        setProbability(probPercent);
 
-      if (p95Prob !== null) {
-        if (p95Prob > 0.53) setRisk("Risky");
+        if (p75 >= 0.53) setRisk("Risky");
         else setRisk("Safe");
+      } else {
+        setProbability(null);
+        setRisk(null);
       }
     } catch (err) {
       console.error("Error analyzing file:", err);
-      alert("Prediction failed. Please try again.");
+      setErrorMsg("Prediction failed. Please check file format and try again.");
     } finally {
       setLoading(false);
     }
@@ -118,7 +133,8 @@ export default function UploadAnalysis({ user }) {
 
   const handleSave = async () => {
     if (!metadataFile || !recordsZip || !risk || probability === null) {
-      return alert("Please complete all steps before saving!");
+      setErrorMsg("Please complete all steps before saving!");
+      return;
     }
 
     const record = {
@@ -139,21 +155,23 @@ export default function UploadAnalysis({ user }) {
 
     try {
       await addDoc(collection(db, "records"), record);
-      alert("✅ Record saved successfully!");
+      setSuccessMsg("✅ Record saved successfully!");
     } catch (err) {
       console.error("Error saving record: ", err);
-      alert("❌ Failed to save record. Check console for details.");
+      setErrorMsg("❌ Failed to save record. Check console for details.");
     }
   };
 
 
   const handleGenerateReport = async () => {
     if (!recordId || !risk || !rrFeatures) {
-      return alert("You must run detection before generating a report.");
+      setErrorMsg("You must run detection before generating a report.");
+      return;
     }
 
     const payload = {
       record_id: recordId,
+      task_type: "early_prediction",
       decision: risk,
       prob_af: probability,
       rr_features: rrFeatures,
@@ -174,24 +192,24 @@ export default function UploadAnalysis({ user }) {
 
       const a = document.createElement("a");
       a.href = url;
-      a.download = `AF_Report_${recordId}.pdf`;
+      a.download = `Early_AF_Report_${recordId}.pdf`;
       a.click();
 
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error(err);
-      alert("Error generating report.");
+      setErrorMsg("Error generating report.");
     }
   };
 
-  const { probText, meanRRText, sdnnText, rmssdText, cvrrText } =
+  const { probText, meanRRText, hrText } =
     rrFeatures ? interpretRRFeatures(rrFeatures, probability) : {};
 
   return (
     <div className="flex items-center justify-center py-10 px-6">
       <div className="bg-white shadow-2xl rounded-3xl p-10 w-full max-w-5xl transition-all">
         <h2 className="text-2xl font-bold mb-8 text-center text-gray-800">
-          AFib Early Prediction
+          Early AF Prediction
         </h2>
 
         {/* Instruction Box */}
@@ -312,9 +330,7 @@ export default function UploadAnalysis({ user }) {
                 <RRSummaryBlock
                   probText={probText}
                   meanRRText={meanRRText}
-                  sdnnText={sdnnText}
-                  rmssdText={rmssdText}
-                  cvrrText={cvrrText}
+                  hrText={hrText}
                 />
               )}
               {rrFeatures && (
@@ -334,13 +350,9 @@ export default function UploadAnalysis({ user }) {
 
           {/* Disclaimer */}
           <p className="text-xs text-gray-500 mt-6 text-center">
-            Disclaimer: This tool provides an indicative risk estimate based on RR
-            variability features and is not a medical device. Consult a clinician for
-            diagnosis.
+            Disclaimer: This tool provides an indicative risk estimate based on RR interval patterns and a deep learning model. It is not a medical device. Please consult a clinician for any diagnosis or treatment decisions.
           </p>
         </div>
-
-
       </div>
 
       {/* Modal for High Risk */}
@@ -348,7 +360,7 @@ export default function UploadAnalysis({ user }) {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md text-center">
             <h2 className="text-2xl font-bold text-red-600 mb-4">
-              ⚠️ High AFib Risk Detected!
+              ⚠️ High Probability of Danger Detected!
             </h2>
             <p className="text-gray-800 text-lg font-semibold mb-2">
               Your estimated probability of danger is{" "}
@@ -369,6 +381,24 @@ export default function UploadAnalysis({ user }) {
           </div>
         </div>
       )}
+      {/* Error Modal */}
+      <StatusModal
+        open={!!errorMsg}
+        type="error"
+        title="Error"
+        message={errorMsg}
+        onClose={() => setErrorMsg("")}
+      />
+
+      {/* Success Modal */}
+      <StatusModal
+        open={!!successMsg}
+        type="success"
+        title="Success"
+        message={successMsg}
+        onClose={() => setSuccessMsg("")}
+      />
+
       <LoadingModal
         visible={loading}
         steps={steps}

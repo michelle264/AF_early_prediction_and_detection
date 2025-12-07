@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torchdiffeq import odeint
 
 from pydantic import BaseModel
-from typing import Dict, Optional
+from typing import Dict, Optional, Literal
 
 class ODEFunc(nn.Module):
     def __init__(self, dim):
@@ -176,26 +176,6 @@ def predict_probabilities(model, X):
         probs = torch.softmax(logits, dim=1).numpy() 
     return probs
 
-def compute_mean_predicted_time_horizon(record_ids, prob_danger, threshold=0.47, window_duration_sec=30):
-    results = []
-    df = pd.DataFrame({
-        "record_id": record_ids,
-        "prob_danger": prob_danger,
-    })
-    for rid, group in df.groupby("record_id"):
-        group = group.reset_index(drop=True)
-        danger_windows = group[group["prob_danger"] >= threshold]
-        if danger_windows.empty:
-            continue
-        first_alert_idx = danger_windows.index[-1]  
-        window_diff = len(group) - first_alert_idx
-        time_horizon_sec = window_diff * window_duration_sec
-        results.append(time_horizon_sec)
-    if results:
-        return float(np.mean(results))
-    else:
-        return 0.0
-
 def load_model(model_class, model_path, *args, **kwargs):
     model = model_class(*args, **kwargs)
     state_dict = torch.load(model_path, map_location=torch.device("cpu"))
@@ -205,27 +185,25 @@ def load_model(model_class, model_path, *args, **kwargs):
 
 def compute_rr_features(rr):
     rr = np.array(rr)
-    diff = np.diff(rr)
 
-    mean_rr = np.mean(rr)
-    sdnn = np.std(rr)
-    rmssd = np.sqrt(np.mean(diff**2))
-    cvrr = sdnn / mean_rr
-    # pnn20 = np.mean(np.abs(diff) > 20)
-    # pnn50 = np.mean(np.abs(diff) > 50)
+    # Mean RR interval in milliseconds
+    mean_rr = float(np.mean(rr))
+
+    # Estimated heart rate (BPM)
+    # HR (bpm) = 60000 ms per minute / mean RR (ms)
+    estimated_hr_bpm = float(60000.0 / mean_rr) if mean_rr > 0 else None
 
     return {
-        "mean_rr": float(mean_rr),
-        "sdnn": float(sdnn),
-        "rmssd": float(rmssd),
-        "cvrr": float(cvrr),
-        # "pnn20": float(pnn20),
-        # "pnn50": float(pnn50),
+        "mean_rr": mean_rr,
+        "estimated_hr_bpm": estimated_hr_bpm,
     }
+
 
 class ReportRequest(BaseModel):
     record_id: str
+    task_type: Literal["early_prediction", "af_detection"]
     decision: str
     prob_af: float
     rr_features: Dict[str, float]
     timestamp: Optional[str] = None
+

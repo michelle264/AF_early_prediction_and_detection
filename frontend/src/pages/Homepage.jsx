@@ -88,7 +88,7 @@ export default function Homepage({ onNavigateToLogin }) {
             <div className="p-6 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <h3 className="text-xl font-semibold mb-3">2. AI-Based Analysis</h3>
                 <p className="text-gray-600">
-                The system processes and evaluates your heart rhythm using a Neural ODE model - performing early prediction or AF detection based on your selected analysis mode.
+                The system analyzes your R–R interval data using Neural ODE–based deep learning models - performing early prediction or AF detection based on your selected analysis mode.
                 </p>
             </div>
 

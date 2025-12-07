@@ -12,9 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from starlette.responses import StreamingResponse
-from pydantic import BaseModel
 from typing import Dict, Optional
-from model_utils import load_model, preprocess_data, predict_probabilities, compute_mean_predicted_time_horizon, NODEModel, compute_rr_features, ReportRequest
+from model_utils import load_model, preprocess_data, predict_probabilities, NODEModel, compute_rr_features, ReportRequest
 
 app = FastAPI()
 
@@ -98,13 +97,7 @@ async def predict(
             .quantile(0.75)  
             .reset_index()
             .rename(columns={"prob_danger": "p75_prob_danger"})
-        )
-
-        # --- Compute mean predicted time horizon with threshold = 0.53 ---
-        mean_predicted_time_horizon = compute_mean_predicted_time_horizon(
-            record_ids, prob_danger, threshold=0.53, window_duration_sec=30
-        )
-        
+        )        
         rr_features = {}
 
         for rid, rri in raw_rr_dict.items():
@@ -114,7 +107,6 @@ async def predict(
         response = {
             "record_id": agg_probs["record_id"].tolist(),
             "prob_danger": agg_probs["p75_prob_danger"].tolist(),
-            "mean_predicted_time_horizon": mean_predicted_time_horizon,
             "rr_features": rr_features,
         }
 
@@ -187,130 +179,130 @@ async def detect(
 
         return response
 
-class ReportRequest(BaseModel):
-    record_id: str
-    decision: str         
-    prob_af: float       
-    rr_features: Dict[str, float]
-    timestamp: Optional[str] = None
+from typing import Dict, Optional, Literal
 
 @app.post("/report/")
 async def generate_report(report: ReportRequest):
     """
-    Generate a PDF report for AF detection with HRV Summary and Interpretation.
+    Generate PDF for either:
+    - Early AF Prediction (threshold 0.53)
+    - AF Detection (threshold 0.65)
     """
+
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
     y = height - 50
 
-    # Header
     c.setFont("Helvetica-Bold", 18)
-    c.drawString(50, y, "Atrial Fibrillation Detection Report")
+
+    if report.task_type == "early_prediction":
+        title = "Early Atrial Fibrillation Prediction Report"
+    else:
+        title = "Atrial Fibrillation Detection Report"
+
+    c.drawString(50, y, title)
     y -= 30
 
+    # BASIC INFORMATION
     c.setFont("Helvetica", 11)
     c.drawString(50, y, f"Record ID: {report.record_id}")
     y -= 16
     c.drawString(50, y, f"Date/Time: {report.timestamp or 'N/A'}")
     y -= 16
-    c.drawString(
-        50,
-        y,
-        f"Decision: {'AF Detected' if report.decision == 'Yes' else 'No AF Detected'}"
-    )
-    y -= 16
-    c.drawString(50, y, f"AF Probability: {report.prob_af}%")
+
+    # APPLY THRESHOLDS
+    p = report.prob_af  / 100.0  
+
+    if report.task_type == "early_prediction":
+        # Threshold: 0.53
+        decision = "High Risk" if p >= 0.53 else "Low Risk"
+        c.drawString(50, y, f"Risk Level: {decision}")
+        y -= 16
+        c.drawString(50, y, f"Probability of Danger: {report.prob_af:.2f}%")
+
+    else:
+        # AF Detection threshold: 0.65
+        decision = "AF Detected" if p >= 0.65 else "No AF Detected"
+        c.drawString(50, y, f"Decision: {decision}")
+        y -= 16
+        c.drawString(50, y, f"AF Probability: {report.prob_af:.2f}%")
+
     y -= 30
 
-    # HRV Summary
+    # RR & Heart Rate Summary
     c.setFont("Helvetica-Bold", 13)
-    c.drawString(50, y, "Heart Rate Variability (HRV) Summary")
-    y -= 22
+    c.drawString(50, y, "RR & Heart Rate Summary")
+    y -= 18
+
+    c.setFont("Helvetica", 10)
+    c.drawString(50, y, "• mean_rr: Average time between two heartbeats in milliseconds.")
+    y -= 14
+    c.drawString(50, y, "• estimated_hr_bpm: Approximate heart rate (beats per minute) computed from RR intervals.")
+    y -= 20
 
     c.setFont("Helvetica", 11)
+
     for key, value in report.rr_features.items():
         c.drawString(60, y, f"{key}: {value:.4f}")
         y -= 16
-        if y < 80:
-            c.showPage()
-            y = height - 50
-            c.setFont("Helvetica", 11)
 
-    # Prepare Interpretation Values
-    mean_rr = report.rr_features.get("mean_rr")
-    sdnn = report.rr_features.get("sdnn")
-    rmssd = report.rr_features.get("rmssd")
-    cvrr = report.rr_features.get("cvrr")
+    # HEART RATE INTERPRETATION (SAFE)
+    est_hr = report.rr_features.get("estimated_hr_bpm")
 
-    p = report.prob_af / 100
-
-    # AF probability meaning
-    if p < 0.3:
-        prob_text = "Low irregularity detected."
-    elif p < 0.6:
-        prob_text = "Moderate irregularity observed."
+    if est_hr is not None:
+        if est_hr < 60:
+            hr_text = "Slow heart rate (below typical resting range)."
+        elif est_hr <= 100:
+            hr_text = "Normal resting heart rate range (60–100 bpm)."
+        else:
+            hr_text = "Fast heart rate (above typical resting range)."
     else:
-        prob_text = "High irregularity detected. Rhythm resembles AF-like pattern."
+        hr_text = "Heart rate could not be estimated."
 
-    # mean_rr interpretation
-    if mean_rr < 700:
-        mean_rr_text = "Fast heart rate detected."
-    elif mean_rr < 1100:
-        mean_rr_text = "Normal heart rate range."
-    else:
-        mean_rr_text = "Slow heart rate detected."
-
-    # sdnn interpretation
-    if sdnn < 50:
-        sdnn_text = "Low variability (stable rhythm)."
-    elif sdnn < 100:
-        sdnn_text = "Moderate variability."
-    else:
-        sdnn_text = "High variability (possible irregular rhythm)."
-
-    # rmssd interpretation
-    if rmssd < 30:
-        rmssd_text = "Low short-term variability (steady rhythm)."
-    elif rmssd < 80:
-        rmssd_text = "Moderate short-term variability."
-    else:
-        rmssd_text = "High short-term variability (may reflect irregular rhythm)."
-
-    # cvrr interpretation
-    if cvrr < 0.05:
-        cvrr_text = "Very stable rhythm."
-    elif cvrr < 0.15:
-        cvrr_text = "Moderately variable rhythm."
-    else:
-        cvrr_text = "Highly irregular rhythm."
-
-    # Interpretation Summary
     y -= 15
-
     c.setFont("Helvetica-Bold", 13)
     c.drawString(50, y, "Interpretation Summary")
-    y -= 22
+    y -= 20
 
     c.setFont("Helvetica", 11)
-    c.drawString(60, y, f"AF Probability: {prob_text}")
-    y -= 16
-    c.drawString(60, y, f"Mean RR: {mean_rr_text}")
-    y -= 16
-    c.drawString(60, y, f"SDNN: {sdnn_text}")
-    y -= 16
-    c.drawString(60, y, f"RMSSD: {rmssd_text}")
-    y -= 16
-    c.drawString(60, y, f"CVRR: {cvrr_text}")
-    y -= 30
+    # Probability text depends on task
+    if report.task_type == "early_prediction":
+        if p >= 0.53:
+            prob_text = "The model predicts a high likelihood of AF occurring soon."
+        else:
+            prob_text = "The model predicts a low likelihood of imminent AF."
+    else:
+        if p >= 0.65:
+            prob_text = "AF Detected."
+        else:
+            prob_text = "No AF Detected."
 
-    # Finalize PDF
+    c.drawString(60, y, prob_text)
+    y -= 16
+    c.drawString(60, y, hr_text)
+    y -= 40
+
+    # DISCLAIMER
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(50, y, "Important Disclaimer")
+    y -= 18
+
+    c.setFont("Helvetica", 9)
+    for line in [
+        "This report is generated by a research prototype, not a medical device.",
+        "Predictions/Detections are for research and educational use only.",
+        "Do not use these results for medical diagnosis or treatment.",
+    ]:
+        c.drawString(60, y, line)
+        y -= 14
+
     c.showPage()
     c.save()
     buffer.seek(0)
 
-    filename = f"AF_Report_{report.record_id}.pdf"
+    filename = f"{report.record_id}_{report.task_type}_report.pdf"
 
     return StreamingResponse(
         buffer,

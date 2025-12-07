@@ -6,8 +6,9 @@ import {
   RRSummaryBlock,
   interpretRRFeatures,
   LoadingModal,
-  GenerateReportButton
-} from "../components/AFInterpretationUtils";
+  GenerateReportButton,
+  StatusModal
+} from "../components/Utils";
 
 
 export default function AFDetection({ user }) {
@@ -19,6 +20,8 @@ export default function AFDetection({ user }) {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [rrFeatures, setRrFeatures] = useState(null);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
   const steps = [
     "Extracting RR intervals…",
@@ -51,7 +54,7 @@ export default function AFDetection({ user }) {
     if (file && file.name.toLowerCase().endsWith(".csv")) {
       setMetadataFile(file);
     } else {
-      alert("Please upload a valid metadata.csv file!");
+      setErrorMsg("Please upload a valid metadata.csv file!");
       setMetadataFile(null);
     }
   };
@@ -61,14 +64,14 @@ export default function AFDetection({ user }) {
     if (file && file.name.toLowerCase().endsWith(".zip")) {
       setRecordsZip(file);
     } else {
-      alert("Please upload a valid records ZIP file!");
+      setErrorMsg("Please upload a valid records ZIP file!");
       setRecordsZip(null);
     }
   };
 
   const handleDetect = async () => {
     if (!metadataFile || !recordsZip) {
-      alert("Please select both metadata.csv and record ZIP file!");
+      setErrorMsg("Please select both metadata.csv and record ZIP file!");
       return;
     }
 
@@ -111,12 +114,12 @@ export default function AFDetection({ user }) {
         : ridRaw || null;
       setRecordId(rid);
 
-      const anyHigh = probs.some((p) => p > 0.65);
+      const anyHigh = probs.some((p) => p >= 0.65);
       setDecision(anyHigh ? "Yes" : "No");
       if (anyHigh) setShowModal(true);
     } catch (err) {
       console.error("Error detecting AF:", err);
-      alert("Failed to detect AF. Check backend and file format.");
+      setErrorMsg("Failed to detect AF. Check backend and file format.");
     } finally {
       setLoading(false);
     }
@@ -124,7 +127,7 @@ export default function AFDetection({ user }) {
 
   const handleSave = async () => {
     if (!metadataFile || !recordsZip || !decision) {
-      return alert("Please complete detection before saving!");
+      return setErrorMsg("Please complete detection before saving!");
     }
 
     const meanPercent = probabilities.length
@@ -149,20 +152,21 @@ export default function AFDetection({ user }) {
 
     try {
       await addDoc(collection(db, "records"), record);
-      alert("✅ Detection saved successfully!");
+      setSuccessMsg("✅ Detection saved successfully!");
     } catch (err) {
       console.error("Error saving detection: ", err);
-      alert("❌ Failed to save detection. Check console for details.");
+      setErrorMsg("❌ Failed to save detection. Check console for details.");
     }
   };
 
   const handleGenerateReport = async () => {
     if (!recordId || !decision || !rrFeatures) {
-      return alert("You must run detection before generating a report.");
+      return setErrorMsg("You must run detection before generating a report.");
     }
 
     const payload = {
       record_id: recordId,
+      task_type: "af_detection",
       decision,
       prob_af: Math.round(probabilities.reduce((a, b) => a + b, 0) / probabilities.length),
       rr_features: rrFeatures,
@@ -189,19 +193,17 @@ export default function AFDetection({ user }) {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error(err);
-      alert("Error generating report.");
+      setErrorMsg("Error generating report.");
     }
   };
 
-  const { probText, meanRRText, sdnnText, rmssdText, cvrrText } =
-    rrFeatures
-      ? interpretRRFeatures(rrFeatures, probabilities)
-      : {};
+  const { probText, meanRRText, hrText } =
+    rrFeatures ? interpretRRFeatures(rrFeatures, probabilities, "af_detection") : {};
 
   return (
     <div className="flex items-center justify-center py-10 px-6">
       <div className="bg-white shadow-2xl rounded-3xl p-10 w-full max-w-5xl transition-all">
-        <h2 className="text-2xl font-bold mb-8 text-center text-gray-800">AFib Detection</h2>
+        <h2 className="text-2xl font-bold mb-8 text-center text-gray-800">AF Detection</h2>
 
         <div className="bg-blue-50 p-4 rounded-lg text-sm text-gray-700 leading-relaxed">
           <p className="font-semibold mb-1">📘 Input Instructions</p>
@@ -299,58 +301,63 @@ export default function AFDetection({ user }) {
                 >
                   {decision}
                 </p>
-
-                {probabilities.length > 0 && (
-                  <div
-                    className={`mt-5 px-5 py-3 rounded-lg w-full max-w-md ${decision === "Yes" ? "bg-red-50" : "bg-green-50"
+              </div>
+              {probabilities.length > 0 && (
+                <div
+                  className={`mt-5 px-5 py-3 rounded-lg w-full max-w-md mx-auto text-center ${decision === "Yes" ? "bg-red-50" : "bg-green-50"
+                    }`}
+                >
+                  <p
+                    className={`font-semibold text-base ${decision === "Yes" ? "text-red-700" : "text-green-700"
                       }`}
                   >
-                    <p
-                      className={`font-semibold text-base ${decision === "Yes" ? "text-red-700" : "text-green-700"
-                        }`}
-                    >
-                      Your estimated probability of AF is{" "}
-                      <span className="text-2xl font-bold">
-                        {Math.round(
-                          probabilities.reduce((a, b) => a + b, 0) / probabilities.length
-                        )}
-                        % !!
-                      </span>
-                    </p>
-                    <p
-                      className={`mt-1 font-semibold ${decision === "Yes" ? "text-red-700" : "text-green-700"
-                        }`}
-                    >
-                      {decision === "Yes"
-                        ? "AF is likely present in your uploaded records."
-                        : "No AF detected in your uploaded records."}
-                    </p>
-                  </div>
-                )}
-                <RRFeaturesCard rr={rrFeatures} />
+                    Your estimated probability of AF is{" "}
+                    <span className="text-2xl font-bold">
+                      {Math.round(
+                        probabilities.reduce((a, b) => a + b, 0) / probabilities.length
+                      )}
+                      % !!
+                    </span>
+                  </p>
+
+                  <p
+                    className={`mt-1 font-semibold ${decision === "Yes" ? "text-red-700" : "text-green-700"
+                      }`}
+                  >
+                    {decision === "Yes"
+                      ? "AF is present in your uploaded records."
+                      : "No AF detected in your uploaded records."}
+                  </p>
+                </div>
+              )}
+
+              <RRFeaturesCard rr={rrFeatures} />
+              <div className="w-full mt-4">
                 <RRSummaryBlock
                   probText={probText}
                   meanRRText={meanRRText}
-                  sdnnText={sdnnText}
-                  rmssdText={rmssdText}
-                  cvrrText={cvrrText}
+                  hrText={hrText}
                 />
-                {rrFeatures && <GenerateReportButton onGenerate={handleGenerateReport} />}
               </div>
+              {rrFeatures && <GenerateReportButton onGenerate={handleGenerateReport} />}
+              {/* </div> */}
 
               <div className="flex justify-center">
                 <button onClick={handleSave} className="px-5 py-2 mt-5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg shadow-md transition">Save Record</button>
               </div>
             </div>
           )}
-
+          {/* Disclaimer */}
+          <p className="text-xs text-gray-500 mt-6 text-center">
+            Disclaimer: This tool provides an indicative risk estimate based on RR interval patterns and a deep learning model. It is not a medical device. Please consult a clinician for any diagnosis or treatment decisions.
+          </p>
         </div>
 
       </div>
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md text-center transform transition-all scale-100 hover:scale-105">
-            <h2 className="text-2xl font-bold text-red-600 mb-4">⚠️ AF Detected</h2>
+            <h2 className="text-2xl font-bold text-red-600 mb-4">⚠️ AF Detected!</h2>
             <p className="text-gray-700 mb-4">
               Your uploaded records indicate a high probability of Atrial Fibrillation (AF).
             </p>
@@ -363,13 +370,30 @@ export default function AFDetection({ user }) {
             </p>
             <button
               onClick={() => setShowModal(false)}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition"
+              className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition"
             >
-              OK
+              Close
             </button>
           </div>
         </div>
       )}
+      {/* Error Modal */}
+      <StatusModal
+        open={!!errorMsg}
+        type="error"
+        title="Error"
+        message={errorMsg}
+        onClose={() => setErrorMsg("")}
+      />
+
+      {/* Success Modal */}
+      <StatusModal
+        open={!!successMsg}
+        type="success"
+        title="Success"
+        message={successMsg}
+        onClose={() => setSuccessMsg("")}
+      />
       <LoadingModal
         visible={loading}
         steps={steps}

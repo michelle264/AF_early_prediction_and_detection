@@ -17,7 +17,6 @@ function App() {
   const [page, setPage] = useState("home");
   const [records, setRecords] = useState([]);
   const [user, setUser] = useState(null);
-  const [showRegister, setShowRegister] = useState(false);
 
 useEffect(() => {
   const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
@@ -67,14 +66,14 @@ useEffect(() => {
           setUser(loggedInUser);
           setPage("dashboard");
         }}
-        onSwitchToRegister={() => setShowRegister(true)}
+        onSwitchToRegister={() => setPage("register")}
       />
     )}
 
-    {showRegister && (
+    {!user && page === "register" && (
       <Register
-        onRegister={() => setShowRegister(false)}
-        onSwitchToLogin={() => setShowRegister(false)}
+        onRegister={() => setPage("login")}
+        onSwitchToLogin={() => setPage("login")}
       />
     )}
 
