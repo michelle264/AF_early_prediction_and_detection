@@ -4,7 +4,6 @@ import AFImage from "./AF_image.jpg";
 export default function Homepage({ onNavigateToLogin }) {
   return (
     <div className="min-h-screen bg-gray-50 font-[Poppins]">
-      {/* Fixed Navbar */}
       <header className="fixed top-0 left-0 w-full bg-gradient-to-r from-blue-900 to-blue-700 shadow z-50">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
           <div className="text-xl font-bold text-white">Heart-Alert</div>
@@ -28,7 +27,6 @@ export default function Homepage({ onNavigateToLogin }) {
         </div>
       </header>
 
-      {/* Hero Section */}
       <main className="pt-16">
         <section
           className="relative py-32 text-center text-white"
@@ -38,7 +36,6 @@ export default function Homepage({ onNavigateToLogin }) {
             backgroundPosition: "center",
           }}
         >
-          {/* Overlay for readability */}
           <div className="absolute inset-0 bg-black opacity-50"></div>
 
           <div className="relative z-10 container mx-auto px-6">
@@ -113,20 +110,19 @@ export default function Homepage({ onNavigateToLogin }) {
             <div className="p-6 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <h3 className="text-xl font-semibold mb-3">AI-Driven Insights</h3>
                 <p className="text-gray-600">
-                  Leverages Neural ODE-based models for rhythm classification
-                  and early risk prediction.
+                  Uses Neural ODE models to predict early AF risk and detect AF, providing clearer insights from RRI data.
                 </p>
               </div>
               <div className="p-6 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <h3 className="text-xl font-semibold mb-3">Non-Invasive Workflow</h3>
+                <h3 className="text-xl font-semibold mb-3">Non-Invasive, Data-Only Solution</h3>
                 <p className="text-gray-600">
-                  Works seamlessly with RRI data - no wearable sensors or invasive procedures required.
+                  Works solely from RRI sequences, removing the need for ECG electrodes, wearables, or clinic-based monitoring.
                 </p>
               </div>
               <div className="p-6 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <h3 className="text-xl font-semibold mb-3">Real-Time Alerts</h3>
                 <p className="text-gray-600">
-                  Provides on-screen alert messages when the <strong>probability of danger or AF</strong> exceeds a defined threshold - ensuring prompt attention and intervention.
+                  Displays immediate warnings when the system detects AF or rising AF-risk, enabling timely awareness and decision-making.
                 </p>
               </div>
             </div>
@@ -134,7 +130,6 @@ export default function Homepage({ onNavigateToLogin }) {
         </section>
       </main>
 
-      {/* Footer */}
       <footer className="bg-white border-t py-6">
         <div className="container mx-auto px-6 text-center text-gray-500">
           © {new Date().getFullYear()} Heart-Alert. All rights reserved.

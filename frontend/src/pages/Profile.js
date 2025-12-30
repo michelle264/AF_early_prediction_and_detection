@@ -1,4 +1,3 @@
-// src/pages/Profile.js
 import { useState, useEffect } from "react";
 import { auth, db } from "../firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -6,7 +5,6 @@ import { doc, getDoc } from "firebase/firestore";
 export default function Profile({ onNavigate }) {
   const [userData, setUserData] = useState(null);
 
-  // Fetch user data
   useEffect(() => {
     const fetchUserData = async () => {
       const user = auth.currentUser;
@@ -32,11 +30,9 @@ export default function Profile({ onNavigate }) {
     style={{ fontFamily: "'Poppins', sans-serif" }}
     >
       <div className="bg-white shadow-2xl rounded-3xl overflow-hidden w-full max-w-2xl">
-        {/* Header Banner */}
         <div className="h-40 bg-gradient-to-r from-blue-500 via-cyan-500 to-teal-400 relative">
           <div className="absolute inset-0 opacity-60"></div>
 
-          {/* Profile Picture (UI Avatar only) */}
           <div className="absolute -bottom-16 left-1/2 transform -translate-x-1/2">
             <img
               src={`https://ui-avatars.com/api/?name=${userData.username}&background=0D8ABC&color=fff`}
@@ -46,12 +42,9 @@ export default function Profile({ onNavigate }) {
           </div>
         </div>
 
-        {/* Body */}
         <div className="pt-20 pb-8 px-8 text-center">
           <h2 className="text-2xl font-bold text-gray-800 mb-1">{userData.username}</h2>
           <p className="text-gray-500 text-sm mb-4">{userData.email}</p>
-
-          {/* Stats Section */}
           <div className="flex justify-center space-x-8 text-gray-700 mb-6">
             <div>
               <p className="text-lg font-semibold">{userData.age}</p>

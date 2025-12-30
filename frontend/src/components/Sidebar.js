@@ -16,8 +16,6 @@ export default function Sidebar({ onNavigate, activePage, onLogout }) {
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) return;
-
-    // ✅ Real-time listener for user's Firestore document
     const userRef = doc(db, "users", user.uid);
     const unsubscribe = onSnapshot(
       userRef,
@@ -41,7 +39,6 @@ export default function Sidebar({ onNavigate, activePage, onLogout }) {
 
   return (
     <div className="w-64 bg-gray-800 text-white flex flex-col overflow-y-auto font-[Poppins]">
-      {/* Profile Section */}
       <div className="flex flex-col items-center text-center p-6 border-b border-gray-700 bg-gray-900">
         {photoURL ? (
           <img

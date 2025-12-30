@@ -12,7 +12,6 @@ import {
 
 
 export default function AFDetection({ user }) {
-  const [metadataFile, setMetadataFile] = useState(null);
   const [recordsZip, setRecordsZip] = useState(null);
   const [decision, setDecision] = useState(null);
   const [probabilities, setProbabilities] = useState([]);
@@ -49,16 +48,6 @@ export default function AFDetection({ user }) {
     }
   }, [decision]);
 
-  const handleMetadataChange = (e) => {
-    const file = e.target.files[0];
-    if (file && file.name.toLowerCase().endsWith(".csv")) {
-      setMetadataFile(file);
-    } else {
-      setErrorMsg("Please upload a valid metadata.csv file!");
-      setMetadataFile(null);
-    }
-  };
-
   const handleRecordsZipChange = (e) => {
     const file = e.target.files[0];
     if (file && file.name.toLowerCase().endsWith(".zip")) {
@@ -70,8 +59,8 @@ export default function AFDetection({ user }) {
   };
 
   const handleDetect = async () => {
-    if (!metadataFile || !recordsZip) {
-      setErrorMsg("Please select both metadata.csv and record ZIP file!");
+    if (!recordsZip) {
+      setErrorMsg("Please select record ZIP file!");
       return;
     }
 
@@ -80,7 +69,6 @@ export default function AFDetection({ user }) {
     setProbabilities([]);
 
     const formData = new FormData();
-    formData.append("metadata_file", metadataFile);
     formData.append("records_zip", recordsZip);
 
     try {
@@ -126,7 +114,7 @@ export default function AFDetection({ user }) {
   };
 
   const handleSave = async () => {
-    if (!metadataFile || !recordsZip || !decision) {
+    if (!recordsZip || !decision) {
       return setErrorMsg("Please complete detection before saving!");
     }
 
@@ -138,7 +126,6 @@ export default function AFDetection({ user }) {
 
     const record = {
       date: new Date().toLocaleString(),
-      metadataFileName: metadataFile.name,
       recordsZipName: recordsZip.name,
       fileName: recordsZip.name,
       record_id: typeof recordId === "undefined" ? null : recordId,
@@ -152,7 +139,7 @@ export default function AFDetection({ user }) {
 
     try {
       await addDoc(collection(db, "records"), record);
-      setSuccessMsg("✅ Detection saved successfully!");
+      setSuccessMsg("Record saved successfully!");
     } catch (err) {
       console.error("Error saving detection: ", err);
       setErrorMsg("❌ Failed to save detection. Check console for details.");
@@ -207,15 +194,23 @@ export default function AFDetection({ user }) {
 
         <div className="bg-blue-50 p-4 rounded-lg text-sm text-gray-700 leading-relaxed">
           <p className="font-semibold mb-1">📘 Input Instructions</p>
-          <p>
-            <strong>metadata.csv</strong> — Must include columns: <code>patient_id</code>, <code>patient_sex</code>, <code>patient_age</code>, <code>record_id</code>, <code>record_date</code>, <code>record_start_time</code>, <code>record_end_time</code>, <code>record_timedelta</code>, <code>record_files</code>, <code>record_seconds</code>, <code>record_samples</code>.
-          </p>
           <p><strong>record.zip</strong> — Contains:</p>
           <ul className="list-disc pl-6 mt-1 space-y-1">
-            <li><code>record_*_rr_*.h5</code>: RR interval data (HDF5 format, automatic QRS annotations by Microport Syneview)</li>
-            <li><code>record_*_rr_labels_*.csv</code>: RR interval annotations (<code>start_file_index</code>, <code>start_rr_index</code>, <code>end_file_index</code>, <code>end_rr_index</code>)</li>
+            <li>
+              <code>record_{`{record_id}`}_rr_{`{index}`}.h5</code>:
+              RR interval data (HDF5 format, automatic QRS annotations by Microport Syneview)
+            </li>
+            <li>
+              <code>record_{`{record_id}`}_rr_labels.csv</code>:
+              RR interval annotations
+              (<code>start_file_index</code>, <code>start_rr_index</code>,
+              <code>end_file_index</code>, <code>end_rr_index</code>)
+            </li>
           </ul>
-          <p className="mt-1">The <code>*</code> corresponds to the same record ID as in <code>metadata.csv</code> (e.g. <code>record_000_rr_labels_000.h5</code>).</p>
+          <p className="mt-1 text-sm text-gray-600">
+            <code>{`{index}`}</code> is a zero-based file index:
+            <code>00</code> for the first RR file, <code>01</code> for the second, and so on.
+          </p>
         </div>
 
         <div className="space-y-4 mt-4">
@@ -224,16 +219,6 @@ export default function AFDetection({ user }) {
               Upload Files
             </p>
             <div className="bg-gray-50 p-4 rounded-lg shadow-inner">
-              <label className="block text-sm font-medium text-gray-600 mb-1">
-                metadata.csv
-              </label>
-              <input
-                type="file"
-                accept=".csv"
-                onChange={handleMetadataChange}
-                className="block w-full text-gray-700 text-sm mb-3"
-              />
-
               <label className="block text-sm font-medium text-gray-600 mb-1">
                 record.zip
               </label>
@@ -340,7 +325,6 @@ export default function AFDetection({ user }) {
                 />
               </div>
               {rrFeatures && <GenerateReportButton onGenerate={handleGenerateReport} />}
-              {/* </div> */}
 
               <div className="flex justify-center">
                 <button onClick={handleSave} className="px-5 py-2 mt-5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg shadow-md transition">Save Record</button>
@@ -377,7 +361,6 @@ export default function AFDetection({ user }) {
           </div>
         </div>
       )}
-      {/* Error Modal */}
       <StatusModal
         open={!!errorMsg}
         type="error"
@@ -386,7 +369,6 @@ export default function AFDetection({ user }) {
         onClose={() => setErrorMsg("")}
       />
 
-      {/* Success Modal */}
       <StatusModal
         open={!!successMsg}
         type="success"

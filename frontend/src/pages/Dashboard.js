@@ -13,16 +13,14 @@ import {
 export default function DashboardOld({ records }) {
   const [activeTab, setActiveTab] = useState("prediction");
 
-  // --- Separate Records ---
+  // Separate Records
   const predictionRecords = records.filter((r) => r.type === "prediction");
   const detectionRecords = records.filter((r) => r.type === "detection");
 
-  // --- Sort by Date (Old → New) ---
   const sortByDate = (a, b) => new Date(a.date) - new Date(b.date);
   predictionRecords.sort(sortByDate);
   detectionRecords.sort(sortByDate);
 
-  // --- Trend Data (Prediction uses Risky/Safe) ---
   const predictionTrendData = predictionRecords.map((r) => ({
     name: r.date,
     probability: r.probability,
@@ -37,10 +35,8 @@ const detectionTrendData = detectionRecords.map((r) => ({
       : 0, 
 }));
 
-
   return (
     <div className="min-h-screen bg-gray-100 p-6 ">
-      {/* Tabs */}
       <div className="flex space-x-4 mb-6 border-b border-gray-300 font-[Poppins]">
         <button
           onClick={() => setActiveTab("prediction")}
@@ -50,7 +46,7 @@ const detectionTrendData = detectionRecords.map((r) => ({
               : "text-gray-500 hover:text-blue-400"
           }`}
         >
-          AF Early Prediction
+          Early AF Prediction
         </button>
         <button
           onClick={() => setActiveTab("detection")}
@@ -64,10 +60,10 @@ const detectionTrendData = detectionRecords.map((r) => ({
         </button>
       </div>
 
-      {/* Tab Content */}
+      {/*Tab Content*/}
       {activeTab === "prediction" ? (
         <>
-          {/* --- Early Prediction --- */}
+          {/*Early Prediction*/}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 ">
             <SummaryCard
               icon={<FaFileAlt size={28} />}
@@ -83,15 +79,15 @@ const detectionTrendData = detectionRecords.map((r) => ({
             />
           </div>
 
-          {/* --- Table --- */}
+          {/*Table*/}
           <div className="bg-white shadow-xl rounded-xl p-6 mb-6">
             <h2 className="text-gray-500 text-lg font-bold mb-4 font-[Poppins]">
-              AF Early Prediction Records
+              Early AF Prediction Records
             </h2>
             <PredictionTable records={predictionRecords} />
           </div>
 
-          {/* --- Trend Chart --- */}
+          {/*Trend Chart*/}
           <TrendChart
             title="Prediction Risk Trend"
             data={predictionTrendData}
@@ -132,7 +128,7 @@ const detectionTrendData = detectionRecords.map((r) => ({
   );
 }
 
-/* --- Reusable Summary Card --- */
+/*Reusable Summary Card*/
 function SummaryCard({ icon, label, value, color }) {
   const colorClasses = {
     blue: "bg-blue-100 text-blue-600",
@@ -157,7 +153,7 @@ function SummaryCard({ icon, label, value, color }) {
   );
 }
 
-/* --- Early Prediction Table (Risky/Safe) --- */
+/*Early Prediction Table (Risky/Safe)*/
 function PredictionTable({ records }) {
   return (
     <table className="w-full text-left border-collapse">
@@ -201,7 +197,7 @@ function PredictionTable({ records }) {
   );
 }
 
-/* --- Detection Table (unchanged) --- */
+/*Detection Table*/
 function DetectionTable({ records }) {
   return (
     <table className="w-full text-left border-collapse">
@@ -262,7 +258,6 @@ function TrendChart({ title, data, binary = false, detection = false }) {
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
 
-              {/* --- X-Axis with date/time split --- */}
               <XAxis
                 dataKey="name"
                 type="category"
@@ -287,8 +282,6 @@ function TrendChart({ title, data, binary = false, detection = false }) {
                 }}
                 padding={{ left: 0, right: 28 }}
               />
-
-              {/* --- Y-Axis --- */}
               {binary ? (
                 <YAxis
                   domain={[0, 1]}
@@ -299,7 +292,6 @@ function TrendChart({ title, data, binary = false, detection = false }) {
                 <YAxis domain={[0, 100]} />
               )}
 
-              {/* --- Tooltip --- */}
               <Tooltip
                 formatter={(value) =>
                   binary
@@ -366,7 +358,6 @@ function TrendChart({ title, data, binary = false, detection = false }) {
                   isAnimationActive={false}
                 />
               ) : (
-                // 🔵 Prediction probability line (Risky/Safe)
                 <Line
                   type="monotone"
                   dataKey="probability"

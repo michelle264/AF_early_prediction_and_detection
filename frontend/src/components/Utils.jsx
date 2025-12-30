@@ -4,12 +4,18 @@ export function interpretRRFeatures(rr, probability, taskType) {
 
   let probText = "";
 
-  // --- Early AF Prediction ---
+  // Early AF Prediction
   if (taskType === "early_prediction") {
     probText =
-      probability >= 53
-        ? "The model flags this segment as higher risk based on RR patterns."
-        : "The model flags this segment as lower risk based on RR patterns.";
+      probability >= 53 ? (
+        <>
+          The model flags this segment as <strong>high danger</strong> risk based on RR patterns.
+        </>
+      ) : (
+        <>
+          The model flags this segment as <strong>low danger</strong> risk based on RR patterns.
+        </>
+      );
   }
 
   // --- AF Detection ---
@@ -22,7 +28,12 @@ export function interpretRRFeatures(rr, probability, taskType) {
 
   const meanRRText =
     typeof mean_rr === "number"
-      ? `Average RR interval for the analysed segment is ${mean_rr.toFixed(1)} ms.`
+      ? `Average RR interval for the analysed segment is ${mean_rr.toFixed(1)} ms ${mean_rr > 1000
+        ? "(context: slower heartbeat)."
+        : mean_rr >= 600
+          ? "(context: typical resting rhythm)."
+          : "(context: faster heartbeat)."
+      }`
       : "Average RR interval could not be computed.";
 
   let hrText = "";
@@ -54,7 +65,7 @@ export function RRFeaturesCard({ rr }) {
   return (
     <div className="mt-6 bg-blue-50 p-6 rounded-2xl shadow w-full">
       <h4 className="text-xl font-bold text-blue-800 mb-4">
-        RR Interval Features <span className="text-sm text-gray-500">(Additional Context Only)</span>
+        Heartbeat Metrics <span className="text-sm text-gray-500">(Additional Context Only)</span>
       </h4>
 
       <div className="grid grid-cols-2 gap-4">
@@ -102,16 +113,17 @@ export function RRFeaturesCard({ rr }) {
 export function RRSummaryBlock({ probText, meanRRText, hrText }) {
   return (
     <div className="mt-4 bg-white rounded-lg shadow p-4 text-sm text-gray-700 space-y-2">
+      <p className="text-gray-500 text-sm mt-3 font-bold">
+        *Heart-rate values are shown only for context. The model’s predictions are based solely on PSR features, which represent the irregularity patterns in RR intervals.*
+      </p>
       <p>{probText}</p>
-      {/* <br></br> */}
-      {/* <p className="text-gray-600 italic">
-        *HRV-related values shown below are additional context only and do not determine the model's prediction.*
-      </p> */}
       <p>{meanRRText}</p>
       <p>{hrText}</p>
+
     </div>
   );
 }
+
 
 // Loading Modal
 export function LoadingModal({ visible, steps, stepIndex, onClose }) {
@@ -136,7 +148,7 @@ export function LoadingModal({ visible, steps, stepIndex, onClose }) {
         </h2>
 
         <p className="text-gray-600 text-sm mb-4">
-          This may take <strong>10-20 seconds</strong>.<br />
+          This may take around <strong>10 seconds</strong>.<br />
           Please do not close the page.
         </p>
 

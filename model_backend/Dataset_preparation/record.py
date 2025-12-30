@@ -7,48 +7,61 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
+# def create_record(record_id, metadata_df, record_path):
+#     metadata_record = (metadata_df[metadata_df["record_id"] == record_id])
+#     assert len(metadata_record) == 1
+#     metadata_record = metadata_record.values[0]
+#     record_path = Path(record_path, record_id)
+#     record = Record(record_path, metadata_record)
+#     return record
+
+REQUIRED_META_COLS = [
+    "patient_sex", "patient_age", "record_id", "record_date",
+    "record_start_time", "record_end_time", "record_timedelta",
+    "record_n_files", "record_n_seconds", "record_n_samples"
+]
 
 def create_record(record_id, metadata_df, record_path):
-    metadata_record = (metadata_df[metadata_df["record_id"] == record_id])
-    assert len(metadata_record) == 1
-    metadata_record = metadata_record.values[0]
     record_path = Path(record_path, record_id)
-    record = Record(record_path, metadata_record)
-    return record
 
+    if metadata_df is None or not set(REQUIRED_META_COLS).issubset(set(metadata_df.columns)):
+        return Record(record_path, metadata_record=None)
+
+    metadata_record = metadata_df[metadata_df["record_id"].astype(str).str.strip() == str(record_id).strip()]
+    if len(metadata_record) != 1:
+        raise ValueError(f"Expected exactly 1 metadata row for {record_id}, got {len(metadata_record)}")
+
+    return Record(record_path, metadata_record.values[0])
 
 class Record:
-    def __init__(self, record_folder, metadata_record):
-        # self.metadata = self.__get_metadata(record_id)
-        self.metadata = RecordMetadata(*metadata_record)
-
+    def __init__(self, record_folder, metadata_record=None):
         self.record_folder = record_folder
+
+        if metadata_record is None:
+            self.metadata = None
+        else:
+            self.metadata = RecordMetadata(*metadata_record)
 
         # discover rr and ecg files
         self.rr_files = sorted(self.record_folder.glob("*rr_*.h5"))
         self.ecg_files = sorted(self.record_folder.glob("*ecg_*.h5"))
 
-        # require rr files to exist; if ECG files are missing, tolerate it and proceed using rr_files
         if len(self.rr_files) == 0:
             raise AssertionError(f"No RR files found for record folder: {self.record_folder}")
 
         if len(self.ecg_files) == 0:
-            # no ECG files found -> warn and set num_days by RR files
             print(f"Warning: no ECG files found for {self.record_folder}; proceeding without ECG (using RR files only).")
             self.num_days = len(self.rr_files)
         else:
-            # prefer ecg count as canonical number of days; ensure RR files match
             self.num_days = len(self.ecg_files)
             if len(self.rr_files) != self.num_days:
                 raise AssertionError(
                     f"Mismatch between RR files ({len(self.rr_files)}) and ECG files ({len(self.ecg_files)}) in {self.record_folder}"
                 )
 
-        # placeholders
         self.rr = None
         self.rr_labels_df = None
         self.rr_labels = None
-
         self.ecg = None
         self.ecg_labels_df = None
         self.ecg_labels = None
@@ -82,18 +95,10 @@ class Record:
 
     # def __read_rr_label(self) -> pd.DataFrame:
     #     rr_labels = sorted(self.record_folder.glob("*rr_labels.csv"))
-    #     print("----------------------")
-    #     print("rr_label", rr_labels)
-    #     df_rr_labels = pd.read_csv(rr_labels[0])
     #     return df_rr_labels
     
     def __read_rr_label(self) -> pd.DataFrame: 
-        print("----------------------")
-        print("Looking inside:", self.record_folder)
-        print("Files in record folder:", list(self.record_folder.glob("*")))
-
         rr_labels = sorted(self.record_folder.glob("*rr_labels.csv"))
-        print("rr_label:", rr_labels)
         df_rr_labels = pd.read_csv(rr_labels[0])
         return df_rr_labels
 

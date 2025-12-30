@@ -23,7 +23,7 @@ useEffect(() => {
     setUser(currentUser);
 
     if (currentUser) {
-      setPage("dashboard"); // go to dashboard when logged in
+      setPage("dashboard"); 
 
       const q = query(
         collection(db, "records"),
@@ -67,6 +67,7 @@ useEffect(() => {
           setPage("dashboard");
         }}
         onSwitchToRegister={() => setPage("register")}
+        onBackToSource={() => setPage("home")}
       />
     )}
 

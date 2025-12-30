@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-import torch
+import torch, os
 from Dataset_preparation.record import Record, create_record
 
 import torch.nn as nn
@@ -9,6 +9,10 @@ from torchdiffeq import odeint
 
 from pydantic import BaseModel
 from typing import Dict, Optional, Literal
+
+import time
+import numpy as np
+import pandas as pd
 
 class ODEFunc(nn.Module):
     def __init__(self, dim):
@@ -33,7 +37,6 @@ class NODEModel(nn.Module):
         )
 
     def forward(self, x):
-        # x: (batch, features) — treat as initial state
         t = torch.tensor([0.0, 1.0], dtype=x.dtype, device=x.device)
         out = odeint(self.odefunc, x, t)[-1]
         return self.classifier(out)
@@ -55,126 +58,95 @@ def phase_space_reconstruct(x, m=3, tau=2):
     psr_flat = np.column_stack(psr_vectors).flatten()
     return psr_flat
 
+def preprocess_data(
+    records_dir: str,
+    window_size=50,
+    step_size=5,
+    m=3,
+    tau=2
+):
+    """
+    - Detect record folders inside records_dir
+    - Load RR from each folder using Record(record_folder, metadata_record=None)
+    - Build PSR windows -> X
+    """
+    if not records_dir or not os.path.isdir(records_dir):
+        raise ValueError("records_dir not found / invalid")
 
-def preprocess_data(metadata_path, records_dir, window_size=50, step_size=5, m=3, tau=2):
-    """
-    Process each record: load raw RRI, build overlapping windows, generate PSR features.
-    Returns:
-        X            → all window feature vectors
-        record_ids   → record id for each window
-        raw_rr       → dict: {record_id: full RRI array}
-    """
-    import traceback
-    metadata_df = pd.read_csv(metadata_path)
+    record_list = sorted([
+        d for d in os.listdir(records_dir)
+        if os.path.isdir(os.path.join(records_dir, d))
+    ])
+
+    if not record_list:
+        raise ValueError("No record folders found in records_dir.")
 
     feature_rows = []
     record_ids = []
-    raw_rr = {}  
+    raw_rr = {}
 
-    for record_id in metadata_df["record_id"]:
+    processed_count = 0
+    skipped_count = 0
+    t_global = time.time()
+
+    for record_id in record_list:
         try:
-            record = create_record(record_id, metadata_df, records_dir)
+            record = create_record(record_id, None, records_dir)
             record.load_rr_record()
 
-            # Full RRI series
             rri = np.concatenate(record.rr)
-            raw_rr[record_id] = rri  
-
+            raw_rr[record_id] = rri
             n = len(rri)
 
-            # Sliding window segmentation
-            for start in range(0, n - window_size + 1, step_size):
-                end = start + window_size
-                window = rri[start:end]
-
-                # Padding if needed
+            # windows (at least one)
+            for start in range(0, max(1, n - window_size + 1), step_size):
+                window = rri[start:start + window_size]
                 if len(window) < window_size:
-                    window = np.pad(window, (0, window_size - len(window)), 'constant')
+                    window = np.pad(window, (0, window_size - len(window)), "constant")
 
                 psr = phase_space_reconstruct(window, m=m, tau=tau)
                 feature_rows.append(psr)
                 record_ids.append(record_id)
 
-            # If record is too short, add exactly one padded window
-            if n < window_size:
-                window = np.pad(rri, (0, window_size - n), 'constant')
-                psr = phase_space_reconstruct(window, m=m, tau=tau)
-                feature_rows.append(psr)
-                record_ids.append(record_id)
+                if n < window_size:
+                    break
+
+            processed_count += 1
 
         except Exception as e:
-            print(f"Skipping record {record_id}: {e}")
-            traceback.print_exc()
+            skipped_count += 1
+            print(f"[preprocess_data] SKIP {record_id}: {type(e).__name__}: {e}")
             continue
 
     if len(feature_rows) == 0:
-        raise ValueError("No valid records processed. Check zip file structure or metadata.")
+        raise ValueError(
+            "No valid records processed. Check zip structure (record folders + RR file names)."
+        )
 
     X = np.stack(feature_rows).astype(np.float32)
     record_ids = np.array(record_ids)
+    return X, record_ids, raw_rr
 
-    return X, record_ids, raw_rr  
+def predict_probabilities(model, X, batch_size=4096):
+    import time
+    t0 = time.time()
 
-def preprocess_data_records(metadata_path, records_dir, window_size=50, step_size=5, m=3, tau=2, record_limit=None):
-    """
-    For each record in metadata.csv, segment RRI into overlapping windows,
-    extract PSR features for each window.
-    Returns X (features for all windows), record_ids (one per window).
-    Optional: record_limit limits how many records to process (for demo/debug).
-    """
-    import traceback
-    metadata_df = pd.read_csv(metadata_path)
+    model.eval()
+    device = next(model.parameters()).device
+    X_tensor = torch.from_numpy(X).float().to(device)
 
-    # --- Add record limit here ---
-    if record_limit is not None:
-        metadata_df = metadata_df.head(record_limit)
-        print(f"[INFO] Limiting to first {record_limit} records for processing.")
-
-    feature_rows = []
-    record_ids = []
-
-    for record_id in metadata_df["record_id"]:
-        try:
-            record = create_record(record_id, metadata_df, records_dir)
-            record.load_rr_record()
-            rri = np.concatenate(record.rr)
-            n = len(rri)
-
-            # Sliding window segmentation
-            for start in range(0, n - window_size + 1, step_size):
-                end = start + window_size
-                window = rri[start:end]
-                if len(window) < window_size:
-                    window = np.pad(window, (0, window_size - len(window)), 'constant')
-                psr = phase_space_reconstruct(window, m=m, tau=tau)
-                feature_rows.append(psr)
-                record_ids.append(record_id)
-
-            # If record is too short, pad and add one window
-            if n < window_size:
-                window = np.pad(rri, (0, window_size - n), 'constant')
-                psr = phase_space_reconstruct(window, m=m, tau=tau)
-                feature_rows.append(psr)
-                record_ids.append(record_id)
-
-        except Exception as e:
-            print(f"Skipping record {record_id}: {e}")
-            traceback.print_exc()
-            continue
-
-    if len(feature_rows) == 0:
-        raise ValueError("No valid records processed. Check zip file structure or metadata.")
-
-    X = np.stack(feature_rows).astype(np.float32)
-    record_ids = np.array(record_ids)
-    return X, record_ids
-
-def predict_probabilities(model, X):
-    X_tensor = torch.from_numpy(X).float()
+    probs_list = []
     with torch.no_grad():
-        logits = model(X_tensor)
-        probs = torch.softmax(logits, dim=1).numpy() 
+        for start in range(0, X_tensor.shape[0], batch_size):
+            end = start + batch_size
+            batch = X_tensor[start:end]
+            logits = model(batch)
+            probs = torch.softmax(logits, dim=1)
+            probs_list.append(probs.cpu())
+
+    probs = torch.cat(probs_list, dim=0).numpy()
     return probs
+
 
 def load_model(model_class, model_path, *args, **kwargs):
     model = model_class(*args, **kwargs)

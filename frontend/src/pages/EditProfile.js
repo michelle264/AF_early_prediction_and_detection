@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { auth, db } from "../firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { StatusModal } from "../components/Utils";
 
 export default function EditProfile({ onNavigate }) {
   const [form, setForm] = useState({ username: "", age: "", gender: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [modal, setModal] = useState({ open: false, type: "success", message: "" });
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -30,11 +32,20 @@ export default function EditProfile({ onNavigate }) {
       setSaving(true);
       const user = auth.currentUser;
       await updateDoc(doc(db, "users", user.uid), form);
-      alert("✅ Profile updated!");
-      onNavigate("profile");
+
+      setModal({
+        open: true,
+        type: "success",
+        message: "Profile updated successfully!",
+      });
+
     } catch (err) {
       console.error(err);
-      alert("Failed to update profile.");
+      setModal({
+        open: true,
+        type: "error",
+        message: "Failed to update profile.",
+      });
     } finally {
       setSaving(false);
     }
@@ -117,6 +128,19 @@ export default function EditProfile({ onNavigate }) {
           </button>
         </div>
       </div>
+      <StatusModal
+        open={modal.open}
+        type={modal.type}
+        title={modal.type === "error" ? "Error" : "Success"}
+        message={modal.message}
+        onClose={() => {
+          setModal({ ...modal, open: false });
+
+          if (modal.type === "success") {
+            onNavigate("profile");
+          }
+        }}
+      />
     </div>
   );
 }

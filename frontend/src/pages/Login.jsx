@@ -3,7 +3,7 @@ import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/aut
 import { auth } from "../firebase";
 import heartImg from "../components/heart.jpg";
 
-export default function Login({ onLogin, onSwitchToRegister }) {
+export default function Login({ onLogin, onSwitchToRegister, onBackToSource }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -44,15 +44,28 @@ export default function Login({ onLogin, onSwitchToRegister }) {
 
   return (
     <div className="relative w-screen h-screen flex items-center justify-center">
-      {/* Background */}
       <div
         className="absolute inset-0 bg-cover bg-left"
         style={{ backgroundImage: `url(${heartImg})` }}
       ></div>
       <div className="absolute inset-0 bg-black/50"></div>
 
-      {/* Card */}
       <div className="relative bg-white shadow-2xl rounded-3xl flex w-full max-w-4xl h-[600px]">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            onBackToSource();
+          }}
+          className="absolute top-6 left-6 text-gray-600 hover:text-gray-900 z-50"
+          aria-label="Back to Source"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none"
+            viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
         {/* Left - Login Form */}
         <div className="w-1/2 flex flex-col justify-center p-10">
           <div className="mb-8">
@@ -119,15 +132,15 @@ export default function Login({ onLogin, onSwitchToRegister }) {
                   Forgot password?
                 </button>
               </div>
-                <p className="text-sm text-gray-500 mt-1">
-                  Don’t have an account? {" "}
-                  <button
-                    onClick={onSwitchToRegister}
-                    className="text-blue-600 hover:underline font-medium"
-                  >
-                    Register here
-                  </button>
-                </p>
+              <p className="text-sm text-gray-500 mt-1">
+                Don’t have an account? {" "}
+                <button
+                  onClick={onSwitchToRegister}
+                  className="text-blue-600 hover:underline font-medium"
+                >
+                  Register here
+                </button>
+              </p>
 
             </>
           ) : (
@@ -164,7 +177,6 @@ export default function Login({ onLogin, onSwitchToRegister }) {
           )}
         </div>
 
-        {/* Right - Heart image */}
         <div
           className="w-1/2 h-full bg-cover rounded-r-3xl"
           style={{ backgroundImage: `url(${heartImg})`, backgroundPosition: "85% center" }}

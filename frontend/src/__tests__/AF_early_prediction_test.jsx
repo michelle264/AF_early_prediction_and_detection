@@ -4,7 +4,7 @@ import AF_early_prediction from "../pages/AF_early_prediction";
 // Mock backend API
 global.fetch = jest.fn();
 
-// Mock Firebase (must include getFirestore)
+// Mock Firebase
 jest.mock("firebase/firestore", () => ({
   getFirestore: jest.fn(() => ({})),
   collection: jest.fn(() => ({})),
@@ -27,45 +27,37 @@ beforeAll(() => {
   global.Notification.requestPermission = jest.fn();
 });
 
-
 describe("AF Early Prediction Component", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  /* --------------------------------------------------------
-     Test 1: Component renders the correct file input fields
-  ---------------------------------------------------------*/
-  test("renders upload fields", () => {
+  // Test 1: Component renders the correct file input field
+  test("renders upload field", () => {
     render(<AF_early_prediction user={mockUser} />);
 
     const inputs = document.querySelectorAll("input[type='file']");
-    expect(inputs.length).toBe(2); // Same style as AF_detection_test
+    expect(inputs.length).toBe(1); // ✅ only ZIP now
 
     expect(screen.getByText(/submit/i)).toBeInTheDocument();
   });
 
-  /* --------------------------------------------------------
-     Test 2: File upload works correctly
-  ---------------------------------------------------------*/
+  // Test 2: File upload works correctly
   test("file upload works", () => {
     render(<AF_early_prediction user={mockUser} />);
 
-    const [metadataInput, zipInput] = document.querySelectorAll("input[type='file']");
+    const zipInput = document.querySelector("input[type='file']");
 
-    const csvFile = new File(["data"], "meta.csv", { type: "text/csv" });
-    const zipFile = new File(["zip"], "records.zip", { type: "application/zip" });
+    const zipFile = new File(["zip"], "records.zip", {
+      type: "application/zip",
+    });
 
-    fireEvent.change(metadataInput, { target: { files: [csvFile] } });
     fireEvent.change(zipInput, { target: { files: [zipFile] } });
 
-    expect(metadataInput.files[0]).toBe(csvFile);
     expect(zipInput.files[0]).toBe(zipFile);
   });
 
-  /* --------------------------------------------------------
-     Test 3: Predict triggers backend and shows result
-  ---------------------------------------------------------*/
+  // Test 3: Predict triggers backend and shows result
   test("predict shows result (Risky / Safe)", async () => {
     render(<AF_early_prediction user={mockUser} />);
 
@@ -77,17 +69,20 @@ describe("AF Early Prediction Component", () => {
       }),
     });
 
-    const [metadataInput, zipInput] = document.querySelectorAll("input[type='file']");
+    const zipInput = document.querySelector("input[type='file']");
 
-    fireEvent.change(metadataInput, { target: { files: [new File(["a"], "meta.csv")] } });
-    fireEvent.change(zipInput, { target: { files: [new File(["b"], "records.zip")] } });
+    fireEvent.change(zipInput, {
+      target: { files: [new File(["b"], "records.zip")] },
+    });
 
     fireEvent.click(screen.getByText(/submit/i));
 
-    await waitFor(() => expect(screen.getByText(/risky/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/risky/i)).toBeInTheDocument()
+    );
   });
 
-    //  Test 4: Modal appears when prediction is risky
+  // Test 4: Modal appears when prediction is risky
   test("shows modal when AF risk is high", async () => {
     render(<AF_early_prediction user={mockUser} />);
 
@@ -99,20 +94,22 @@ describe("AF Early Prediction Component", () => {
       }),
     });
 
-    const [metadataInput, zipInput] = document.querySelectorAll("input[type='file']");
+    const zipInput = document.querySelector("input[type='file']");
 
-    fireEvent.change(metadataInput, { target: { files: [new File(["a"], "meta.csv")] } });
-    fireEvent.change(zipInput, { target: { files: [new File(["b"], "records.zip")] } });
+    fireEvent.change(zipInput, {
+      target: { files: [new File(["b"], "records.zip")] },
+    });
 
     fireEvent.click(screen.getByText(/submit/i));
 
     await waitFor(() =>
-      expect(screen.getByText(/High AFib Risk Detected/i)).toBeInTheDocument()
+      expect(
+        screen.getByText(/High Probability of Danger Detected/i)
+      ).toBeInTheDocument()
     );
   });
 
-
-    //  Test 5: save record → calls Firestore addDoc
+  // Test 5: save record → calls Firestore addDoc
   test("save record calls addDoc", async () => {
     const { addDoc } = require("firebase/firestore");
 
@@ -126,10 +123,11 @@ describe("AF Early Prediction Component", () => {
       }),
     });
 
-    const [metadataInput, zipInput] = document.querySelectorAll("input[type='file']");
+    const zipInput = document.querySelector("input[type='file']");
 
-    fireEvent.change(metadataInput, { target: { files: [new File(["a"], "meta.csv")] } });
-    fireEvent.change(zipInput, { target: { files: [new File(["b"], "records.zip")] } });
+    fireEvent.change(zipInput, {
+      target: { files: [new File(["b"], "records.zip")] },
+    });
 
     fireEvent.click(screen.getByText(/submit/i));
 
@@ -140,25 +138,26 @@ describe("AF Early Prediction Component", () => {
     expect(addDoc).toHaveBeenCalled();
   });
 
-//      Test 6: Backend error → shows alert
-  test("shows alert when backend request fails", async () => {
+  // Test 6: Backend error → shows alert
+  test("shows error modal when backend request fails", async () => {
     render(<AF_early_prediction user={mockUser} />);
-
-    jest.spyOn(window, "alert").mockImplementation(() => {});
 
     fetch.mockRejectedValueOnce(new Error("Server error"));
 
-    const [metadataInput, zipInput] = document.querySelectorAll("input[type='file']");
+    const zipInput = document.querySelector("input[type='file']");
 
-    fireEvent.change(metadataInput, { target: { files: [new File(["a"], "meta.csv")] } });
-    fireEvent.change(zipInput, { target: { files: [new File(["b"], "records.zip")] } });
+    fireEvent.change(zipInput, {
+      target: { files: [new File(["b"], "records.zip")] },
+    });
 
     fireEvent.click(screen.getByText(/submit/i));
 
-    await waitFor(() =>
-      expect(window.alert).toHaveBeenCalledWith(
-        "Prediction failed. Please try again."
-      )
-    );
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "Prediction failed. Please check file format and try again."
+        )
+      ).toBeInTheDocument();
+    });
   });
 });
