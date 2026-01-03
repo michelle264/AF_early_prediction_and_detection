@@ -22,14 +22,13 @@ These models support:
 ### System Implementation
 
 - **Backend**: FastAPI (preprocessing, model inference, report generation)
-- **Frontend**: React (file upload, prediction display, dashboards)
-- **End-to-end pipeline**: RRI input → prediction → alerts → result visualisation
+- **Frontend**: React (file upload, early prediction and detection display, dashboards)
 
 ## Dataset Setup
 
 Before running the code, download the **IRIDIA-AF dataset** from:
 
-https://github.com/cedricgilon/iridia-af
+https://zenodo.org/records/8405941
 
 Place the dataset in the following directory:
 
