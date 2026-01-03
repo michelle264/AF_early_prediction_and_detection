@@ -9,10 +9,8 @@
 !.gitignore
 !.gitattributes
 
-# Inside model_backend, ignore everything first
-model_backend/*
-
-# Re-include all subfolders
+# Re-include all subfolders AND files
+!model_backend/**/*
 !model_backend/**/
 
 # Ignore Records contents
@@ -20,4 +18,3 @@ model_backend/Records/*
 
 # But keep a .gitkeep file inside Records
 !model_backend/Records/.gitkeep
-# 
