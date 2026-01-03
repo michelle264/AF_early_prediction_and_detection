@@ -328,7 +328,7 @@ function TrendChart({ title, data, binary = false, detection = false }) {
                   dot={({ cx, cy, payload }) => {
                     if (cx == null || cy == null) return null;
                     const fill =
-                      payload.probability > 50 ? "#ef4444" : "#10b981";
+                      payload.probability > 65 ? "#ef4444" : "#10b981";
                     return (
                       <circle
                         cx={cx}
@@ -343,7 +343,7 @@ function TrendChart({ title, data, binary = false, detection = false }) {
                   activeDot={({ cx, cy, payload }) => {
                     if (cx == null || cy == null) return null;
                     const fill =
-                      payload.probability > 50 ? "#ef4444" : "#10b981";
+                      payload.probability > 65 ? "#ef4444" : "#10b981";
                     return (
                       <circle
                         cx={cx}

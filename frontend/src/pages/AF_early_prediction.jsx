@@ -195,13 +195,6 @@ export default function UploadAnalysis({ user }) {
         {/* Instruction Box */}
         <div className="bg-blue-50 p-4 rounded-lg text-sm text-gray-700 leading-relaxed">
           <p className="font-semibold mb-1">📘 Input Instructions</p>
-          {/* <p><strong>record.zip</strong> — Contains:</p>
-          <ul className="list-disc pl-6 mt-1 space-y-1">
-            <li><code>record_*_rr_*.h5</code>: RR interval data (HDF5 format, automatic QRS annotations by Microport Syneview)</li>
-            <li><code>record_*_rr_labels_*.csv</code>: RR interval annotations (<code>start_file_index</code>, <code>start_rr_index</code>, <code>end_file_index</code>, <code>end_rr_index</code>)</li>
-          </ul>
-          <p className="mt-1">The <code>*</code> corresponds to the record ID (e.g. <code>record_000_rr_labels_000.h5</code>).</p>
-        </div> */}
           <p><strong>record.zip</strong> — Contains:</p>
           <ul className="list-disc pl-6 mt-1 space-y-1">
             <li>

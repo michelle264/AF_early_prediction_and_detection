@@ -107,7 +107,7 @@ export default function AFDetection({ user }) {
       if (anyHigh) setShowModal(true);
     } catch (err) {
       console.error("Error detecting AF:", err);
-      setErrorMsg("Failed to detect AF. Check backend and file format.");
+      setErrorMsg("Failed to detect AF. Please check file format and try again.");
     } finally {
       setLoading(false);
     }
