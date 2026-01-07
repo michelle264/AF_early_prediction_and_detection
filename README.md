@@ -16,13 +16,14 @@ The following models are implemented:
 - **PSR-HYBRID** – Hybrid NODE and attention model using PSR-based features  
 
 These models support:
-- Early AF prediction (SR / pre-AF / AF)
-- AF detection (SR / AF)
+- Early AF prediction (SR / pre-AF / AF) - Refer to Three Class Models
+- AF detection (SR / AF) - Refer to Two Class Models
 
 ### System Implementation
 
-- **Backend**: FastAPI (preprocessing, model inference, report generation)
-- **Frontend**: React (file upload, early prediction and detection display, dashboards)
+- **Backend**: FastAPI (data preprocessing, model inference, report generation, and RESTful API services)
+- **Frontend**: React (source page, authentication page, file upload, early AF prediction and AF detection result display, dashboards)
+- **Authentication & Database**: Firebase Authentication and Firestore (secure user authentication, session management, and analysis result storage)
 
 ## Dataset Setup
 
