@@ -39,6 +39,21 @@ export default function Sidebar({ onNavigate, activePage, onLogout }) {
 
   return (
     <div className="w-64 bg-gray-800 text-white flex flex-col overflow-y-auto font-[Poppins]">
+      <div
+        onClick={() => onNavigate("home")}
+        role="link"
+        aria-label="Go to Heart-Alert home"
+        className="flex items-center justify-center gap-2 px-4 py-5 bg-gray-900 border-b border-gray-700 cursor-pointer hover:bg-gray-800 transition"
+      >
+        <FaHeartbeat className="text-red-500" size={22} />
+        <span
+          className="text-xl font-bold tracking-wide select-none"
+          style={{ fontFamily: "'Montserrat', sans-serif" }}
+        >
+          Heart-Alert
+        </span>
+      </div>
+
       <div className="flex flex-col items-center text-center p-6 border-b border-gray-700 bg-gray-900">
         {photoURL ? (
           <img
@@ -69,11 +84,10 @@ export default function Sidebar({ onNavigate, activePage, onLogout }) {
       <nav className="flex-1 p-4 space-y-2">
         <button
           onClick={() => onNavigate("dashboard")}
-          className={`flex items-center space-x-2 w-full text-left px-3 py-2 rounded-lg ${
-            activePage === "dashboard"
-              ? "bg-gray-600 text-blue-400"
-              : "hover:bg-gray-700"
-          }`}
+          className={`flex items-center space-x-2 w-full text-left px-3 py-2 rounded-lg ${activePage === "dashboard"
+            ? "bg-gray-600 text-blue-400"
+            : "hover:bg-gray-700"
+            }`}
         >
           <FaChartBar size={18} />
           <span>Dashboard</span>
@@ -81,11 +95,10 @@ export default function Sidebar({ onNavigate, activePage, onLogout }) {
 
         <button
           onClick={() => onNavigate("prediction")}
-          className={`flex items-center space-x-2 w-full text-left px-3 py-2 rounded-lg ${
-            activePage === "prediction"
-              ? "bg-gray-600 text-blue-400"
-              : "hover:bg-gray-700"
-          }`}
+          className={`flex items-center space-x-2 w-full text-left px-3 py-2 rounded-lg ${activePage === "prediction"
+            ? "bg-gray-600 text-blue-400"
+            : "hover:bg-gray-700"
+            }`}
         >
           <FaUpload size={18} />
           <span>Early AF Prediction</span>
@@ -93,11 +106,10 @@ export default function Sidebar({ onNavigate, activePage, onLogout }) {
 
         <button
           onClick={() => onNavigate("detection")}
-          className={`flex items-center space-x-2 w-full text-left px-3 py-2 rounded-lg ${
-            activePage === "detection"
-              ? "bg-gray-600 text-blue-400"
-              : "hover:bg-gray-700"
-          }`}
+          className={`flex items-center space-x-2 w-full text-left px-3 py-2 rounded-lg ${activePage === "detection"
+            ? "bg-gray-600 text-blue-400"
+            : "hover:bg-gray-700"
+            }`}
         >
           <FaHeartbeat size={18} />
           <span>AF Detection</span>

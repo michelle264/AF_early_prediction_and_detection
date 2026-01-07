@@ -18,34 +18,34 @@ function App() {
   const [records, setRecords] = useState([]);
   const [user, setUser] = useState(null);
 
-useEffect(() => {
-  const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-    setUser(currentUser);
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
 
-    if (currentUser) {
-      setPage("dashboard"); 
+      if (currentUser) {
+        setPage("dashboard");
 
-      const q = query(
-        collection(db, "records"),
-        where("userId", "==", currentUser.uid)
-      );
-      const unsubscribeRecords = onSnapshot(q, (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setRecords(data);
-      });
+        const q = query(
+          collection(db, "records"),
+          where("userId", "==", currentUser.uid)
+        );
+        const unsubscribeRecords = onSnapshot(q, (snapshot) => {
+          const data = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+          setRecords(data);
+        });
 
-      return () => unsubscribeRecords();
-    } else {
-      setUser(null);
-      setRecords([]);
-    }
-  });
+        return () => unsubscribeRecords();
+      } else {
+        setUser(null);
+        setRecords([]);
+      }
+    });
 
-  return () => unsubscribeAuth();
-}, []);
+    return () => unsubscribeAuth();
+  }, []);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -55,46 +55,40 @@ useEffect(() => {
   };
 
   return (
-  <div className="flex min-h-screen bg-gray-100">
-    {!user && page === "home" && (
-      <Homepage onNavigateToLogin={() => setPage("login")} />
-    )}
-
-    {!user && page === "login" && (
-      <Login
-        onLogin={(loggedInUser) => {
-          setUser(loggedInUser);
-          setPage("dashboard");
-        }}
-        onSwitchToRegister={() => setPage("register")}
-        onBackToSource={() => setPage("home")}
-      />
-    )}
-
-    {!user && page === "register" && (
-      <Register
-        onRegister={() => setPage("login")}
-        onSwitchToLogin={() => setPage("login")}
-      />
-    )}
-
-    {user && (
-      <>
-        <Sidebar
-          onNavigate={setPage}
-          activePage={page}
-          onLogout={handleLogout}
+    <div className="flex min-h-screen bg-gray-100">
+      {page === "home" ? (
+        <Homepage user={user} onNavigate={setPage} />
+      ) : !user && page === "login" ? (
+        <Login
+          onLogin={(loggedInUser) => {
+            setUser(loggedInUser);
+            setPage("dashboard");
+          }}
+          onSwitchToRegister={() => setPage("register")}
+          onBackToSource={() => setPage("home")}
         />
-        <div className="flex-1 p-6">
-          {page === "dashboard" && <Dashboard records={records} />}
-          {page === "prediction" && <Upload user={user} />}
-          {page === "detection" && <AFDetection user={user} />}
-          {page === "profile" && <Profile onNavigate={setPage} />}
-          {page === "editProfile" && <EditProfile onNavigate={setPage} />}
-        </div>
-      </>
-    )}
-  </div>
-);
+      ) : !user && page === "register" ? (
+        <Register
+          onRegister={() => setPage("login")}
+          onSwitchToLogin={() => setPage("login")}
+        />
+      ) : user ? (
+        <>
+          <Sidebar
+            onNavigate={setPage}
+            activePage={page}
+            onLogout={handleLogout}
+          />
+          <div className="flex-1 p-6">
+            {page === "dashboard" && <Dashboard records={records} />}
+            {page === "prediction" && <Upload user={user} />}
+            {page === "detection" && <AFDetection user={user} />}
+            {page === "profile" && <Profile onNavigate={setPage} />}
+            {page === "editProfile" && <EditProfile onNavigate={setPage} />}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
 }
 export default App;
