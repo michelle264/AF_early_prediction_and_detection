@@ -266,14 +266,24 @@ async def generate_report(report: ReportRequest):
 
     c.setFont("Helvetica", 11)
     for key, value in report.rr_features.items():
-        c.drawString(60, y, f"{key}: {value:.4f}")
+        if key == "mean_rr":
+            text = f"mean_rr: {value:.2f} ms"
+        elif key == "estimated_hr_bpm":
+            text = f"estimated_hr_bpm: {value:.2f} bpm"
+        else:
+            text = f"{key}: {value:.4f}"
+
+        c.drawString(60, y, text)
         y -= 16
 
     mean_rr = report.rr_features.get("mean_rr")
     if mean_rr is not None:
-        rr_text = "Short RR intervals (consistent with faster heart rate)." if mean_rr < 600 \
-            else "Normal RR interval range." if mean_rr <= 1000 \
-            else "Long RR intervals (consistent with slower heart rate)."
+        if mean_rr < 600:
+            rr_text = "Shorter average RR intervals, indicating a higher average heart rate."
+        elif mean_rr <= 1000:
+            rr_text = "Average RR intervals within the typical resting range."
+        else:
+            rr_text = "Longer average RR intervals, indicating a lower average heart rate."
     else:
         rr_text = "RR interval summary unavailable."
 
@@ -292,17 +302,33 @@ async def generate_report(report: ReportRequest):
 
     c.setFont("Helvetica", 11)
     if report.task_type == "early_prediction":
-        prob_text = "The model predicts a high likelihood of AF occurring soon." if p >= 0.53 \
-            else "The model predicts a low likelihood of imminent AF."
+        if p >= 0.53:
+            prob_text = "This record is classified as high risk for early AF onset."
+            comment_text = "Closer monitoring is recommended, with consideration of clinical evaluation where appropriate."
+        else:
+            prob_text = "This record is classified as low risk for early AF onset."
+            comment_text = "No elevated early risk indicated. Routine monitoring and general health awareness remain advisable."
     else:
-        prob_text = "AF Detected." if p >= 0.65 else "No AF Detected."
+        if p >= 0.65:
+            prob_text = "AF is detected in this recording."
+            comment_text = "Findings are consistent with atrial fibrillation. Clinical evaluation is recommended."
+        else:
+            prob_text = "No AF Detected."
+            comment_text = "No atrial fibrillation detected in this recording. Routine monitoring is suggested."
 
     c.drawString(60, y, prob_text)
     y -= 16
     c.drawString(60, y, rr_text)
     y -= 16
     c.drawString(60, y, hr_text)
-    y -= 40
+    y -= 16
+
+    c.setFont("Helvetica-Oblique", 10)
+    c.drawString(60, y, comment_text)
+    y -= 24
+    c.setFont("Helvetica", 11)
+
+    y -= 16 
 
     c.showPage()
     c.save()
