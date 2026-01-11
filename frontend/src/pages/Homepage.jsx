@@ -113,15 +113,15 @@ export default function Homepage({ user, onNavigate }) {
                 </p>
               </div>
               <div className="p-6 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <h3 className="text-xl font-semibold mb-3">Non-Invasive, Data-Only Solution</h3>
+                <h3 className="text-xl font-semibold mb-3">Non-Invasive, Data-Only Analysis</h3>
                 <p className="text-gray-600">
-                  Works solely from RRI sequences, removing the need for ECG electrodes, wearables, or clinic-based monitoring.
+                  Operates solely on RRI sequences, eliminating the need for raw ECG waveforms, electrode placement, or continuous clinical monitoring.
                 </p>
               </div>
               <div className="p-6 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <h3 className="text-xl font-semibold mb-3">Real-Time Alerts</h3>
+                <h3 className="text-xl font-semibold mb-3">Immediate Risk Alerts</h3>
                 <p className="text-gray-600">
-                  Displays immediate warnings when the system detects AF or rising AF-risk, enabling timely awareness and decision-making.
+                  Displays instant warnings after data analysis when AF or elevated AF-risk is detected, supporting timely clinical awareness and decision-making.
                 </p>
               </div>
             </div>
