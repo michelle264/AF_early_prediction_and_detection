@@ -3,6 +3,9 @@ uvicorn[standard]
 
 # Core data & ML
 numpy
+
+# Core data & ML
+numpy
 pandas
 torch
 torchdiffeq
@@ -16,7 +19,21 @@ scipy
 h5py
 
 # API utilities
+scikit-learn
+
+# HRV & signal processing
+hrv-analysis
+scipy
+
+# File formats
+h5py
+
+# API utilities
 python-multipart
+
+# Reporting / plotting
+reportlab
+matplotlib
 
 # Reporting / plotting
 reportlab
