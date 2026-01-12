@@ -1,9 +1,23 @@
 fastapi
 uvicorn[standard]
-pandas
+
+# Core data & ML
 numpy
+pandas
 torch
 torchdiffeq
-reportlab
-python-multipart
+scikit-learn
+
+# HRV & signal processing
+hrv-analysis
+scipy
+
+# File formats
 h5py
+
+# API utilities
+python-multipart
+
+# Reporting / plotting
+reportlab
+matplotlib
