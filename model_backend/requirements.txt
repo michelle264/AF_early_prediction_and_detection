@@ -6,3 +6,4 @@ torch
 torchdiffeq
 reportlab
 python-multipart
+h5py
