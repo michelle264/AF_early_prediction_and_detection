@@ -67,7 +67,7 @@ const detectionTrendData = detectionRecords.map((r) => ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 ">
             <SummaryCard
               icon={<FaFileAlt size={28} />}
-              label="Uploaded Records"
+              label="Saved Records"
               value={predictionRecords.length}
               color="blue"
             />
@@ -98,13 +98,13 @@ const detectionTrendData = detectionRecords.map((r) => ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <SummaryCard
               icon={<FaFileAlt size={28} />}
-              label="Uploaded Records"
+              label="Saved Records"
               value={detectionRecords.length}
               color="blue"
             />
             <SummaryCard
               icon={<FaHeartbeat size={28} />}
-              label="AF Detected"
+              label="AF Detected Cases"
               value={detectionRecords.filter((r) => r.af_detected).length}
               color="red"
             />
