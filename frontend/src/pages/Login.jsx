@@ -15,11 +15,44 @@ export default function Login({ onLogin, onSwitchToRegister, onBackToSource }) {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setError("");
+
+    // 1) Empty field validation
+    if (!email.trim() && !password.trim()) {
+      setError("Please enter your email and password.");
+      return;
+    }
+    if (!email.trim()) {
+      setError("Please enter your email.");
+      return;
+    }
+    if (!password.trim()) {
+      setError("Please enter your password.");
+      return;
+    }
+
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password
+      );
       onLogin(userCredential.user);
     } catch (err) {
-      setError(err.message);
+      // 2) Friendly Firebase errors
+      const code = err?.code;
+
+      if (code === "auth/user-not-found") {
+        setError("No account found with this email. Please register first.");
+      } else if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
+        setError("Incorrect email or password.");
+      } else if (code === "auth/invalid-email") {
+        setError("Invalid email format. Please check your email.");
+      } else if (code === "auth/too-many-requests") {
+        setError("Too many attempts. Please try again later.");
+      } else {
+        setError("Login failed. Please try again.");
+      }
     }
   };
 
