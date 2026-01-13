@@ -1,41 +1,20 @@
 fastapi
 uvicorn[standard]
+
+# Fix nolds crash
 nolds==0.6.2
 
-# Core data & ML
-numpy
-
-# Core data & ML
 numpy
 pandas
+scipy
+scikit-learn
+h5py
+hrv-analysis
+python-multipart
+reportlab
+matplotlib
+
+# CPU-only PyTorch
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch
 torchdiffeq
-scikit-learn
-
-# HRV & signal processing
-hrv-analysis
-scipy
-
-# File formats
-h5py
-
-# API utilities
-scikit-learn
-
-# HRV & signal processing
-hrv-analysis
-scipy
-
-# File formats
-h5py
-
-# API utilities
-python-multipart
-
-# Reporting / plotting
-reportlab
-matplotlib
-
-# Reporting / plotting
-reportlab
-matplotlib
