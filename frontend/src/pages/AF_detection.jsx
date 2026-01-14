@@ -1,18 +1,21 @@
 import { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
-import { collection, addDoc } from "firebase/firestore";
 import {
   RRFeaturesCard,
   RRSummaryBlock,
   interpretRRFeatures,
   LoadingModal,
   GenerateReportButton,
-  StatusModal
+  StatusModal,
+  validateRRFiles,
+  clearFileInput,
+  FileUploadSection,
+  saveRecordToFirebase
 } from "../components/Utils";
 
 
 export default function AFDetection({ user }) {
-  const [recordsZip, setRecordsZip] = useState(null);
+  const [rrFiles, setRrFiles] = useState([]);
   const [decision, setDecision] = useState(null);
   const [probabilities, setProbabilities] = useState([]);
   const [recordId, setRecordId] = useState(null);
@@ -48,19 +51,30 @@ export default function AFDetection({ user }) {
     }
   }, [decision]);
 
-  const handleRecordsZipChange = (e) => {
-    const file = e.target.files[0];
-    if (file && file.name.toLowerCase().endsWith(".zip")) {
-      setRecordsZip(file);
-    } else {
-      setErrorMsg("Please upload a valid records ZIP file!");
-      setRecordsZip(null);
+  const handleRrFilesChange = (e) => {
+    const files = Array.from(e.target.files);
+    const validation = validateRRFiles(files);
+
+    if (!validation.valid) {
+      setErrorMsg(validation.error);
+      setRrFiles([]);
+      clearFileInput();
+      return;
     }
+
+    setRrFiles(files);
+    setErrorMsg("");
+  };
+
+  const handleClearFiles = () => {
+    setRrFiles([]);
+    setErrorMsg("");
+    clearFileInput();
   };
 
   const handleDetect = async () => {
-    if (!recordsZip) {
-      setErrorMsg("Please select record ZIP file!");
+    if (rrFiles.length === 0) {
+      setErrorMsg("Please select at least one .h5 file!");
       return;
     }
 
@@ -69,7 +83,9 @@ export default function AFDetection({ user }) {
     setProbabilities([]);
 
     const formData = new FormData();
-    formData.append("records_zip", recordsZip);
+    rrFiles.forEach(file => {
+      formData.append("rr_files", file);
+    });
 
     try {
       const response = await fetch("http://localhost:8000/detect/", {
@@ -114,7 +130,7 @@ export default function AFDetection({ user }) {
   };
 
   const handleSave = async () => {
-    if (!recordsZip || !decision) {
+    if (rrFiles.length === 0 || !decision) {
       return setErrorMsg("Please complete detection before saving!");
     }
 
@@ -124,25 +140,22 @@ export default function AFDetection({ user }) {
       )
       : null;
 
-    const record = {
-      date: new Date().toLocaleString(),
-      recordsZipName: recordsZip.name,
-      fileName: recordsZip.name,
+    const recordData = {
+      filesUploaded: rrFiles.map(f => f.name).join(", "),
+      fileName: rrFiles.map(f => f.name).join(", "),
       record_id: typeof recordId === "undefined" ? null : recordId,
       type: "detection",
       probability: meanPercent,
       af_detected: decision === "Yes",
       probabilities: probabilities,
-      userId: auth?.currentUser?.uid || user?.uid || null,
-      createdAt: new Date().toISOString(),
     };
 
-    try {
-      await addDoc(collection(db, "records"), record);
+    const result = await saveRecordToFirebase(db, auth, recordData);
+    
+    if (result.success) {
       setSuccessMsg("Record saved successfully!");
-    } catch (err) {
-      console.error("Error saving detection: ", err);
-      setErrorMsg("❌ Failed to save detection. Check console for details.");
+    } else {
+      setErrorMsg(result.error);
     }
   };
 
@@ -194,42 +207,28 @@ export default function AFDetection({ user }) {
 
         <div className="bg-blue-50 p-4 rounded-lg text-sm text-gray-700 leading-relaxed">
           <p className="font-semibold mb-1">📘 Input Instructions</p>
-          <p><strong>record.zip</strong> — Contains:</p>
+          <p><strong>Upload RR Interval Data (HDF5):</strong></p>
           <ul className="list-disc pl-6 mt-1 space-y-1">
             <li>
               <code>record_{`{record_id}`}_rr_{`{index}`}.h5</code>:
-              RR interval data (HDF5 format, automatic QRS annotations by Microport Syneview)
+              RR interval data in HDF5 format (automatic QRS annotations by Microport Syneview)
             </li>
             <li>
-              <code>record_{`{record_id}`}_rr_labels.csv</code>:
-              RR interval annotations
-              (<code>start_file_index</code>, <code>start_rr_index</code>,
-              <code>end_file_index</code>, <code>end_rr_index</code>)
+              You can upload one or multiple .h5 files from the same record
+            </li>
+            <li>
+              <code>{`{index}`}</code> is a zero-based file index:
+              <code> 00</code> for the first RRI file, <code>01</code> for the second, etc.
             </li>
           </ul>
-          <p className="mt-1 text-sm text-gray-600">
-            <code>{`{index}`}</code> is a zero-based file index:
-            <code>00</code> for the first RR file, <code>01</code> for the second, and so on.
-          </p>
         </div>
 
         <div className="space-y-4 mt-4">
-          <div>
-            <p className="text-sm font-semibold text-gray-700 mb-1 mt-4">
-              Upload Files
-            </p>
-            <div className="bg-gray-50 p-4 rounded-lg shadow-inner">
-              <label className="block text-sm font-medium text-gray-600 mb-1">
-                record.zip
-              </label>
-              <input
-                type="file"
-                accept=".zip"
-                onChange={handleRecordsZipChange}
-                className="block w-full text-gray-700 text-sm"
-              />
-            </div>
-          </div>
+          <FileUploadSection
+            rrFiles={rrFiles}
+            onFilesChange={handleRrFilesChange}
+            onClearFiles={handleClearFiles}
+          />
 
           <div className="flex justify-center">
             <button

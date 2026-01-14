@@ -21,6 +21,13 @@ jest.mock("firebase/storage", () => ({
 
 const mockUser = { uid: "user123" };
 
+// MOCK UTILS
+const mockSaveRecordToFirebase = jest.fn(() => Promise.resolve({ success: true, error: null }));
+jest.mock("../components/Utils", () => ({
+  ...jest.requireActual("../components/Utils"),
+  saveRecordToFirebase: (...args) => mockSaveRecordToFirebase(...args)
+}));
+
 beforeAll(() => {
   global.Notification = jest.fn();
   global.Notification.permission = "granted";
@@ -30,6 +37,7 @@ beforeAll(() => {
 describe("AF Early Prediction Component", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSaveRecordToFirebase.mockImplementation(() => Promise.resolve({ success: true, error: null }));
   });
 
   // Test 1: Component renders the correct file input field
@@ -37,7 +45,11 @@ describe("AF Early Prediction Component", () => {
     render(<AF_early_prediction user={mockUser} />);
 
     const inputs = document.querySelectorAll("input[type='file']");
-    expect(inputs.length).toBe(1); // ✅ only ZIP now
+    expect(inputs.length).toBe(1);
+    
+    const fileInput = inputs[0];
+    expect(fileInput).toHaveAttribute("accept", ".h5");
+    expect(fileInput).toHaveAttribute("multiple");
 
     expect(screen.getByText(/submit/i)).toBeInTheDocument();
   });
@@ -46,15 +58,15 @@ describe("AF Early Prediction Component", () => {
   test("file upload works", () => {
     render(<AF_early_prediction user={mockUser} />);
 
-    const zipInput = document.querySelector("input[type='file']");
+    const fileInput = document.querySelector("input[type='file']");
 
-    const zipFile = new File(["zip"], "records.zip", {
-      type: "application/zip",
+    const h5File = new File(["data"], "record_001_rr_00.h5", {
+      type: "application/x-hdf5",
     });
 
-    fireEvent.change(zipInput, { target: { files: [zipFile] } });
+    fireEvent.change(fileInput, { target: { files: [h5File] } });
 
-    expect(zipInput.files[0]).toBe(zipFile);
+    expect(fileInput.files[0]).toBe(h5File);
   });
 
   // Test 3: Predict triggers backend and shows result
@@ -64,15 +76,16 @@ describe("AF Early Prediction Component", () => {
     fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
+        record_id: ["record_001"],
         prob_danger: [0.8],
-        rr_features: { record_001: { mean_rr: 800, sdnn: 50 } },
+        rr_features: { record_001: { mean_rr: 800, estimated_hr_bpm: 75.0 } },
       }),
     });
 
-    const zipInput = document.querySelector("input[type='file']");
+    const fileInput = document.querySelector("input[type='file']");
 
-    fireEvent.change(zipInput, {
-      target: { files: [new File(["b"], "records.zip")] },
+    fireEvent.change(fileInput, {
+      target: { files: [new File(["data"], "record_001_rr_00.h5")] },
     });
 
     fireEvent.click(screen.getByText(/submit/i));
@@ -89,15 +102,16 @@ describe("AF Early Prediction Component", () => {
     fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
+        record_id: ["record_001"],
         prob_danger: [0.9],
-        rr_features: { record_001: { mean_rr: 700, sdnn: 100 } },
+        rr_features: { record_001: { mean_rr: 700, estimated_hr_bpm: 85.0 } },
       }),
     });
 
-    const zipInput = document.querySelector("input[type='file']");
+    const fileInput = document.querySelector("input[type='file']");
 
-    fireEvent.change(zipInput, {
-      target: { files: [new File(["b"], "records.zip")] },
+    fireEvent.change(fileInput, {
+      target: { files: [new File(["data"], "record_001_rr_00.h5")] },
     });
 
     fireEvent.click(screen.getByText(/submit/i));
@@ -109,24 +123,23 @@ describe("AF Early Prediction Component", () => {
     );
   });
 
-  // Test 5: save record → calls Firestore addDoc
-  test("save record calls addDoc", async () => {
-    const { addDoc } = require("firebase/firestore");
-
+  // Test 5: save record → calls saveRecordToFirebase
+  test("save record calls saveRecordToFirebase", async () => {
     render(<AF_early_prediction user={mockUser} />);
 
     fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
+        record_id: ["record_001"],
         prob_danger: [0.3],
-        rr_features: { record_001: { mean_rr: 800 } },
+        rr_features: { record_001: { mean_rr: 800, estimated_hr_bpm: 75.0 } },
       }),
     });
 
-    const zipInput = document.querySelector("input[type='file']");
+    const fileInput = document.querySelector("input[type='file']");
 
-    fireEvent.change(zipInput, {
-      target: { files: [new File(["b"], "records.zip")] },
+    fireEvent.change(fileInput, {
+      target: { files: [new File(["data"], "record_001_rr_00.h5")] },
     });
 
     fireEvent.click(screen.getByText(/submit/i));
@@ -135,7 +148,7 @@ describe("AF Early Prediction Component", () => {
 
     fireEvent.click(screen.getByText(/save record/i));
 
-    expect(addDoc).toHaveBeenCalled();
+    expect(mockSaveRecordToFirebase).toHaveBeenCalled();
   });
 
   // Test 6: Backend error → shows alert
@@ -144,10 +157,10 @@ describe("AF Early Prediction Component", () => {
 
     fetch.mockRejectedValueOnce(new Error("Server error"));
 
-    const zipInput = document.querySelector("input[type='file']");
+    const fileInput = document.querySelector("input[type='file']");
 
-    fireEvent.change(zipInput, {
-      target: { files: [new File(["b"], "records.zip")] },
+    fireEvent.change(fileInput, {
+      target: { files: [new File(["data"], "record_001_rr_00.h5")] },
     });
 
     fireEvent.click(screen.getByText(/submit/i));

@@ -17,23 +17,23 @@ export default function DashboardOld({ records }) {
   const predictionRecords = records.filter((r) => r.type === "prediction");
   const detectionRecords = records.filter((r) => r.type === "detection");
 
-  const sortByDate = (a, b) => new Date(a.date) - new Date(b.date);
+  const sortByDate = (a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date);
   predictionRecords.sort(sortByDate);
   detectionRecords.sort(sortByDate);
 
-  const predictionTrendData = predictionRecords.map((r) => ({
+  const predictionTrendData = [...predictionRecords].reverse().map((r) => ({
     name: r.date,
     probability: r.probability,
     risk: r.risk,
   }));
 
-const detectionTrendData = detectionRecords.map((r) => ({
-  name: r.date,
-  probability:
-    r.probability !== undefined && r.probability !== null
-      ? r.probability
-      : 0, 
-}));
+  const detectionTrendData = [...detectionRecords].reverse().map((r) => ({
+    name: r.date,
+    probability:
+      r.probability !== undefined && r.probability !== null
+        ? r.probability
+        : 0, 
+  }));
 
   return (
     <div className="min-h-screen bg-gray-100 p-6 ">

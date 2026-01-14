@@ -1,5 +1,4 @@
 import io
-import zipfile
 import pandas as pd
 import numpy as np
 import torch
@@ -16,11 +15,9 @@ from model_utils import (
 client = TestClient(app)
 
 # Helper functions
-def create_dummy_zip():
-    memory_file = io.BytesIO()
-    with zipfile.ZipFile(memory_file, "w") as zf:
-        zf.writestr("record_001_rr_00.h5", "dummy_rr_data")
-        zf.writestr("record_001_rr_labels_00.csv", "start_rr_index,end_rr_index\n0,10")
+def create_dummy_h5_file():
+    """Create a dummy HDF5 file in memory"""
+    memory_file = io.BytesIO(b"dummy_h5_data")
     memory_file.seek(0)
     return memory_file
 
@@ -114,23 +111,6 @@ def test_predict_probabilities_shape_and_row_sum():
 
 # INTEGRATION TESTS (FastAPI endpoints + request/response flow)
 def test_predict_endpoint(monkeypatch):
-    csv_buffer = io.BytesIO()
-    df = pd.DataFrame({
-        "record_id": ["record_001"],
-        "patient_age": [40],
-        "patient_sex": ["F"],
-        "record_date": ["2020-01-01"],
-        "record_start_time": ["00:00:00"],
-        "record_end_time": ["00:01:00"],
-        "record_files": ["record_001_rr_00.h5"],
-        "record_seconds": [60],
-        "record_samples": [300]
-    })
-    df.to_csv(csv_buffer, index=False)
-    csv_buffer.seek(0)
-
-    zip_buffer = create_dummy_zip()
-
     monkeypatch.setattr(
         "main.preprocess_data",
         lambda *args, **kwargs: (
@@ -145,11 +125,13 @@ def test_predict_endpoint(monkeypatch):
         lambda model, X: np.array([[0.6, 0.3, 0.1]])
     )
 
+    h5_file = create_dummy_h5_file()
+
     response = client.post(
         "/predict/",
-        files={
-            "records_zip": ("records.zip", zip_buffer.read(), "application/zip")
-        }
+        files=[
+            ("rr_files", ("record_001_rr_00.h5", h5_file, "application/x-hdf5"))
+        ]
     )
 
     assert response.status_code == 200
@@ -165,12 +147,6 @@ def test_predict_endpoint(monkeypatch):
     assert any(isinstance(v, (int, float)) for v in rrf.values())
 
 def test_detect_endpoint(monkeypatch):
-    csv_buffer = io.BytesIO()
-    pd.DataFrame({"record_id": ["record_001"]}).to_csv(csv_buffer, index=False)
-    csv_buffer.seek(0)
-
-    zip_buffer = create_dummy_zip()
-
     monkeypatch.setattr(
         "main.preprocess_data",
         lambda *a, **k: (
@@ -185,11 +161,13 @@ def test_detect_endpoint(monkeypatch):
         lambda model, X: np.array([[0.3, 0.7]])
     )
 
+    h5_file = create_dummy_h5_file()
+
     response = client.post(
         "/detect/",
-        files={
-            "records_zip": ("records.zip", zip_buffer.read(), "application/zip")
-        }
+        files=[
+            ("rr_files", ("record_001_rr_00.h5", h5_file, "application/x-hdf5"))
+        ]
     )
 
     assert response.status_code == 200

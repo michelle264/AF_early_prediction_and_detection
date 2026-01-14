@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from starlette.responses import StreamingResponse
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from model_utils import (
     load_model, preprocess_data, predict_probabilities,
     NODEModel, compute_rr_features, ReportRequest
@@ -54,63 +54,41 @@ def root():
     return {"status": "running", "message": "AF project backend is live."}
 
 
-def _fix_flat_structure(records_dir: str) -> None:
+def _save_uploaded_h5_files(h5_files: List[UploadFile], records_dir: str) -> None:
     """
-    If extracted ZIP has no subfolders, group files into record folders.
-    Example file: record_022_rr_00.csv -> folder: record_022/
+    Save uploaded HDF5 files to a record folder structure.
+    Groups files by record_id extracted from filename.
     """
-    if not any(os.path.isdir(os.path.join(records_dir, d)) for d in os.listdir(records_dir)):
-        for f in os.listdir(records_dir):
-            p = os.path.join(records_dir, f)
-            if os.path.isfile(p):
-                rid = "_".join(f.split("_")[:2])  
-                target = os.path.join(records_dir, rid)
-                os.makedirs(target, exist_ok=True)
-                shutil.move(p, os.path.join(target, f))
-
-
-def _validate_zip_files(records_dir: str) -> None:
-    """
-    Validate file extensions inside extracted ZIP (recursive).
-    Only allows .h5 and .csv.
-    """
-    invalid = []
-    for root, _, files in os.walk(records_dir):
-        for f in files:
-            if not f.lower().endswith((".h5", ".csv")):
-                invalid.append(os.path.relpath(os.path.join(root, f), records_dir))
-    if invalid:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid file(s) found in ZIP: {', '.join(invalid)}. Only .h5 or .csv allowed."
-        )
+    for h5_file in h5_files:
+        filename = h5_file.filename
+        if not filename.lower().endswith(".h5"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file type: {filename}. Only .h5 files are allowed."
+            )
+        
+        # Extract record_id from filename (e.g., record_002_rr_00.h5 -> record_002)
+        rid = "_".join(filename.split("_")[:2])
+        target_dir = os.path.join(records_dir, rid)
+        os.makedirs(target_dir, exist_ok=True)
+        
+        # Save file
+        file_path = os.path.join(target_dir, filename)
+        with open(file_path, "wb") as f:
+            f.write(h5_file.file.read())
 
 @app.post("/predict/")
 async def predict(
-    records_zip: UploadFile = File(...),
+    rr_files: List[UploadFile] = File(...),
 ):
     t_start = time.time()
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        zip_path = os.path.join(tmpdir, "records.zip")
-
-        #Read ZIP bytes & save
-        records_bytes = await records_zip.read()
-        with open(zip_path, "wb") as f:
-            f.write(records_bytes)
-
-        #Extract ZIP
         records_dir = os.path.join(tmpdir, "Records")
-        try:
-            with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                zip_ref.extractall(records_dir)
-        except zipfile.BadZipFile:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid records.zip file. Please upload a valid ZIP archive."
-            )
-        _validate_zip_files(records_dir)
-        _fix_flat_structure(records_dir)
+        os.makedirs(records_dir, exist_ok=True)
+        
+        # Save uploaded HDF5 files
+        _save_uploaded_h5_files(rr_files, records_dir)
 
         available_records = {
             d.strip()
@@ -129,10 +107,7 @@ async def predict(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         
-        # Normalization
         X = X / 1000.0
-
-        # Model inference 
         with torch.no_grad():
             probs = predict_probabilities(model, X)
 
@@ -160,28 +135,16 @@ async def predict(
 
 @app.post("/detect/")
 async def detect(
-    records_zip: UploadFile = File(...),
+    rr_files: List[UploadFile] = File(...),
 ):
-
     t_start = time.time()
+    
     with tempfile.TemporaryDirectory() as tmpdir:
-        zip_path = os.path.join(tmpdir, "records.zip")
-
-        records_bytes = await records_zip.read()
-        with open(zip_path, "wb") as f:
-            f.write(records_bytes)
         records_dir = os.path.join(tmpdir, "Records")
-        try:
-            with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                zip_ref.extractall(records_dir)
-        except zipfile.BadZipFile:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid records.zip file. Please upload a valid ZIP archive."
-            )
-
-        _validate_zip_files(records_dir)
-        _fix_flat_structure(records_dir)
+        os.makedirs(records_dir, exist_ok=True)
+        
+        # Save uploaded HDF5 files
+        _save_uploaded_h5_files(rr_files, records_dir)
 
         available_records = {
             d.strip()
@@ -191,7 +154,7 @@ async def detect(
         if not available_records:
             raise HTTPException(
                 status_code=400,
-                detail="No record folders found in ZIP after structure fix."
+                detail="No record folders found after uploading files."
             )
 
         # Preprocess
@@ -200,9 +163,7 @@ async def detect(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-        # Normalize
         X = X / 1000.0
-
         with torch.no_grad():
             probs = predict_probabilities(two_model, X)
 

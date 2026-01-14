@@ -66,9 +66,10 @@ class Record:
         self.ecg_labels_df = None
         self.ecg_labels = None
 
-    def load_rr_record(self):
+    def load_rr_record(self, load_labels=False):
         self.rr = [self.__read_rr_file(rr_file) for rr_file in self.rr_files]
-        self.__create_rr_labels()
+        if load_labels:
+            self.__create_rr_labels()
 
     def __read_rr_file(self, rr_file: Path, clean_rr=True) -> np.ndarray:
         with h5py.File(rr_file, "r") as f:
@@ -99,11 +100,16 @@ class Record:
     
     def __read_rr_label(self) -> pd.DataFrame: 
         rr_labels = sorted(self.record_folder.glob("*rr_labels.csv"))
+        if not rr_labels:
+            return None
         df_rr_labels = pd.read_csv(rr_labels[0])
         return df_rr_labels
 
     def __create_rr_labels(self):
         self.rr_labels_df = self.__read_rr_label()
+        if self.rr_labels_df is None:
+            self.rr_labels = None
+            return
         len_rr = [len(rr) for rr in self.rr]
 
         start_day = self.rr_labels_df["start_file_index"].unique()

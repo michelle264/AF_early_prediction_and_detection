@@ -1,3 +1,52 @@
+// FILE VALIDATION UTILITIES
+// Validate RR files: check format, naming, and record consistency
+export function validateRRFiles(files) {
+  const invalidFiles = files.filter(f => !f.name.toLowerCase().endsWith(".h5"));
+
+  if (invalidFiles.length > 0) {
+    return { valid: false, error: "Please upload only .h5 files!" };
+  }
+
+  if (files.length === 0) {
+    return { valid: false, error: "Please select at least one .h5 file!" };
+  }
+
+  // Extract record IDs
+  const recordIds = files.map(f => {
+    const parts = f.name.split("_");
+    if (parts.length >= 4 && parts[2] === "rr") {
+      return `${parts[0]}_${parts[1]}`;
+    }
+    return null;
+  });
+
+  // Check if all files have valid record ID format
+  if (recordIds.some(id => id === null)) {
+    return { 
+      valid: false, 
+      error: "Invalid filename format! Files must be named like: record_{record_id}_rr_{index}.h5" 
+    };
+  }
+
+  // Check if all files belong to the same record
+  const uniqueRecordIds = [...new Set(recordIds)];
+  if (uniqueRecordIds.length > 1) {
+    return { 
+      valid: false, 
+      error: `All files must be from the same record! Found: ${uniqueRecordIds.join(", ")}` 
+    };
+  }
+
+  return { valid: true, error: null };
+}
+
+// Handle file clearing
+export function clearFileInput() {
+  const fileInput = document.querySelector('input[type="file"]');
+  if (fileInput) fileInput.value = "";
+}
+
+// INTERPRETATION & DISPLAY UTILITIES
 // Interpret RR Features & Probability
 export function interpretRRFeatures(rr, probability, taskType) {
   const { mean_rr, estimated_hr_bpm } = rr || {};
@@ -18,7 +67,7 @@ export function interpretRRFeatures(rr, probability, taskType) {
       );
   }
 
-  // --- AF Detection ---
+  // AF Detection
   else if (taskType === "af_detection") {
     probText =
       probability >= 65
@@ -200,4 +249,62 @@ export function StatusModal({ open, type = "error", title, message, onClose }) {
   );
 }
 
+// FILE UPLOAD COMPONENT
+export function FileUploadSection({ rrFiles, onFilesChange, onClearFiles, error }) {
+  return (
+    <div>
+      <p className="text-sm font-semibold text-gray-700 mb-1 mt-4">
+        Upload Files
+      </p>
+      <div className="bg-gray-50 p-4 rounded-lg shadow-inner">
+        <label className="block text-sm font-medium text-gray-600 mb-1">
+          RRI Data Files (.h5)
+        </label>
+        <input
+          type="file"
+          accept=".h5"
+          multiple
+          onChange={onFilesChange}
+          className="block w-full text-gray-700 text-sm"
+        />
+        {rrFiles.length > 0 && (
+          <div className="flex items-center justify-between mt-2">
+            <p className="text-xs text-gray-500">
+              {rrFiles.length} file(s) selected
+            </p>
+            <button
+              onClick={onClearFiles}
+              className="text-xs text-red-600 hover:text-red-700 font-medium underline"
+            >
+              Clear files
+            </button>
+          </div>
+        )}
+        {error && (
+          <p className="text-xs text-red-600 mt-2">{error}</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
+// FIREBASE UTILITIES
+// Save record to Firestore
+export async function saveRecordToFirebase(db, auth, recordData) {
+  const { collection, addDoc } = await import("firebase/firestore");
+  
+  const record = {
+    ...recordData,
+    userId: auth?.currentUser?.uid || recordData.userId || null,
+    createdAt: new Date().toISOString(),
+    date: new Date().toLocaleString(),
+  };
+
+  try {
+    await addDoc(collection(db, "records"), record);
+    return { success: true, error: null };
+  } catch (err) {
+    console.error("Error saving record: ", err);
+    return { success: false, error: "Failed to save record. Check console for details." };
+  }
+}

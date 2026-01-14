@@ -120,7 +120,7 @@ def preprocess_data(
 
     if len(feature_rows) == 0:
         raise ValueError(
-            "No valid records processed. Check zip structure (record folders + RR file names)."
+            "No valid records processed. Check file format."
         )
 
     X = np.stack(feature_rows).astype(np.float32)

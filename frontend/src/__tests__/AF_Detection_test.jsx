@@ -12,7 +12,12 @@ jest.mock("firebase/firestore", () => ({
   addDoc: jest.fn(() => Promise.resolve({ id: "123" }))
 }));
 
-import { addDoc } from "firebase/firestore";
+// MOCK UTILS
+const mockSaveRecordToFirebase = jest.fn(() => Promise.resolve({ success: true, error: null }));
+jest.mock("../components/Utils", () => ({
+  ...jest.requireActual("../components/Utils"),
+  saveRecordToFirebase: (...args) => mockSaveRecordToFirebase(...args)
+}));
 
 // MOCK NOTIFICATION
 global.Notification = function () {
@@ -25,23 +30,22 @@ window.alert = jest.fn();
 // RESET MOCKED FETCH
 beforeEach(() => {
   global.fetch = jest.fn();
+  mockSaveRecordToFirebase.mockImplementation(() => Promise.resolve({ success: true, error: null }));
 });
 
-// Helper to upload ZIP only
-function uploadZip(zip) {
-  const zipInput = document.querySelector("input[type='file']");
-  fireEvent.change(zipInput, { target: { files: [zip] } });
+// Helper to upload HDF5 files
+function uploadH5Files(files) {
+  const fileInput = document.querySelector("input[type='file']");
+  fireEvent.change(fileInput, { target: { files } });
 }
 
 // Renders the upload field
 test("renders upload input", () => {
   render(<AFDetection user={{ uid: "u1" }} />);
-
-  // ✅ only record.zip should exist now
-  expect(screen.getAllByText(/record\.zip/i).length).toBeGreaterThan(0);
-
-  // ❌ metadata.csv should NOT be present anymore
-  expect(screen.queryByText(/metadata\.csv/i)).toBeNull();
+  expect(screen.getByText(/RRI Data Files/i)).toBeInTheDocument();
+  const fileInput = document.querySelector("input[type='file']");
+  expect(fileInput).toHaveAttribute("accept", ".h5");
+  expect(fileInput).toHaveAttribute("multiple");
 });
 
 // Missing file → error modal
@@ -51,19 +55,18 @@ test("submit without file shows error modal", async () => {
   fireEvent.click(screen.getByText(/submit/i));
 
   await waitFor(() => {
-    // ✅ update this string to match your new UI message
     expect(
-      screen.getByText("Please select record ZIP file!")
+      screen.getByText("Please select at least one .h5 file!")
     ).toBeInTheDocument();
   });
 });
 
 // Save Record calls Firestore
-test("save record triggers addDoc", async () => {
+test("save record triggers saveRecordToFirebase", async () => {
   global.fetch.mockResolvedValueOnce({
     ok: true,
     json: async () => ({
-      record_ids: ["record_001"],
+      record_id: ["record_001"],
       prob_af: [0.8],
       rr_features: {
         record_001: {
@@ -76,27 +79,27 @@ test("save record triggers addDoc", async () => {
 
   render(<AFDetection user={{ uid: "u1" }} />);
 
-  const zip = new File(["bbb"], "records.zip", { type: "application/zip" });
+  const h5File = new File(["data"], "record_001_rr_00.h5", { type: "application/x-hdf5" });
 
-  uploadZip(zip);
+  uploadH5Files([h5File]);
 
   fireEvent.click(screen.getByText(/submit/i));
 
   const saveBtn = await screen.findByText(/save record/i);
   fireEvent.click(saveBtn);
 
-  expect(addDoc).toHaveBeenCalledTimes(1);
+  expect(mockSaveRecordToFirebase).toHaveBeenCalledTimes(1);
 });
 
 // Report generation calls backend
 test("generate report triggers backend", async () => {
   global.fetch
-    // Prediction request
+    // Detection request
     .mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        record_ids: ["record_001"],
-        prob_af: [0.6],
+        record_id: ["record_001"],
+        prob_af: [0.8],
         rr_features: {
           record_001: {
             mean_rr: 800,
@@ -113,9 +116,9 @@ test("generate report triggers backend", async () => {
 
   render(<AFDetection user={{ uid: "u1" }} />);
 
-  const zip = new File(["bbb"], "records.zip", { type: "application/zip" });
+  const h5File = new File(["data"], "record_001_rr_00.h5", { type: "application/x-hdf5" });
 
-  uploadZip(zip);
+  uploadH5Files([h5File]);
 
   fireEvent.click(screen.getByText(/submit/i));
 
@@ -130,7 +133,7 @@ test("modal appears when AF detected", async () => {
   global.fetch.mockResolvedValueOnce({
     ok: true,
     json: async () => ({
-      record_ids: ["record_001"],
+      record_id: ["record_001"],
       prob_af: [0.95],
       rr_features: {
         record_001: {
@@ -143,9 +146,9 @@ test("modal appears when AF detected", async () => {
 
   render(<AFDetection user={{ uid: "u1" }} />);
 
-  const zip = new File(["bbb"], "records.zip", { type: "application/zip" });
+  const h5File = new File(["data"], "record_001_rr_00.h5", { type: "application/x-hdf5" });
 
-  uploadZip(zip);
+  uploadH5Files([h5File]);
 
   fireEvent.click(screen.getByText(/submit/i));
 
