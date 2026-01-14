@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { auth, db } from "./firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged, signOut, sendEmailVerification } from "firebase/auth";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 
 import Sidebar from "./components/Sidebar";
@@ -12,6 +12,7 @@ import EditProfile from "./pages/EditProfile";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Homepage from "./pages/Homepage";
+import VerifyEmail from "./pages/VerifyEmail";
 
 function App() {
   const [page, setPage] = useState("home");
@@ -54,41 +55,70 @@ function App() {
     setPage("login");
   };
 
-  return (
-    <div className="flex min-h-screen bg-gray-100">
-      {page === "home" ? (
-        <Homepage user={user} onNavigate={setPage} />
-      ) : !user && page === "login" ? (
-        <Login
-          onLogin={(loggedInUser) => {
-            setUser(loggedInUser);
+  const handleBackToLogin = async () => {
+    await signOut(auth);    
+    setUser(null);          
+    setPage("login");        
+  };
+
+return (
+  <div className="flex min-h-screen bg-gray-100">
+    {page === "home" ? (
+      <Homepage user={user} onNavigate={setPage} />
+    ) : !user && page === "login" ? (
+      <Login
+        onLogin={async (loggedInUser) => {
+          try {
+            await loggedInUser.reload?.();
+          } catch {}
+
+          setUser(loggedInUser);
+
+          if (!loggedInUser?.emailVerified) {
+            setPage("verifyEmail");
+          } else {
             setPage("dashboard");
-          }}
-          onSwitchToRegister={() => setPage("register")}
-          onBackToSource={() => setPage("home")}
-        />
-      ) : !user && page === "register" ? (
-        <Register
-          onRegister={() => setPage("login")}
-          onSwitchToLogin={() => setPage("login")}
-        />
-      ) : user ? (
-        <>
-          <Sidebar
-            onNavigate={setPage}
-            activePage={page}
-            onLogout={handleLogout}
-          />
-          <div className="flex-1 p-6">
-            {page === "dashboard" && <Dashboard records={records} />}
-            {page === "prediction" && <Upload user={user} />}
-            {page === "detection" && <AFDetection user={user} />}
-            {page === "profile" && <Profile onNavigate={setPage} />}
-            {page === "editProfile" && <EditProfile onNavigate={setPage} />}
-          </div>
-        </>
-      ) : null}
-    </div>
-  );
+          }
+        }}
+        onSwitchToRegister={() => setPage("register")}
+        onBackToSource={() => setPage("home")}
+      />
+    ) : !user && page === "register" ? (
+      <Register
+        onRegister={async (newUser) => {
+          if (newUser) setUser(newUser);
+          setPage("verifyEmail");
+        }}
+        onSwitchToLogin={() => setPage("login")}
+      />
+    ) : user && !user.emailVerified ? (
+      <VerifyEmail
+        onResend={async () => {
+          if (!auth.currentUser) return;
+          await sendEmailVerification(auth.currentUser);
+        }}
+        onCheckVerified={async () => {
+          await auth.currentUser.reload();
+          const u = auth.currentUser;
+          setUser(u);
+
+          if (u?.emailVerified) setPage("dashboard");
+        }}
+        onBackToLogin={handleBackToLogin}
+      />
+    ) : user ? (
+      <>
+        <Sidebar onNavigate={setPage} activePage={page} onLogout={handleLogout} />
+        <div className="flex-1 p-6">
+          {page === "dashboard" && <Dashboard records={records} />}
+          {page === "prediction" && <Upload user={user} />}
+          {page === "detection" && <AFDetection user={user} />}
+          {page === "profile" && <Profile onNavigate={setPage} />}
+          {page === "editProfile" && <EditProfile onNavigate={setPage} />}
+        </div>
+      </>
+    ) : null}
+  </div>
+);
 }
 export default App;

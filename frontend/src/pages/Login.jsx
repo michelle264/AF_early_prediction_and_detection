@@ -7,6 +7,7 @@ export default function Login({ onLogin, onSwitchToRegister, onBackToSource }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const [resetMode, setResetMode] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetMessage, setResetMessage] = useState("");
@@ -16,18 +17,22 @@ export default function Login({ onLogin, onSwitchToRegister, onBackToSource }) {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
 
     // 1) Empty field validation
     if (!email.trim() && !password.trim()) {
       setError("Please enter your email and password.");
+      setIsLoading(false);
       return;
     }
     if (!email.trim()) {
       setError("Please enter your email.");
+      setIsLoading(false);
       return;
     }
     if (!password.trim()) {
       setError("Please enter your password.");
+      setIsLoading(false);
       return;
     }
 
@@ -39,6 +44,7 @@ export default function Login({ onLogin, onSwitchToRegister, onBackToSource }) {
       );
       onLogin(userCredential.user);
     } catch (err) {
+      setIsLoading(false);
       // 2) Friendly Firebase errors
       const code = err?.code;
 
@@ -99,7 +105,6 @@ export default function Login({ onLogin, onSwitchToRegister, onBackToSource }) {
           </svg>
         </button>
 
-        {/* Left - Login Form */}
         <div className="w-1/2 flex flex-col justify-center p-10">
           <div className="mb-8">
             <h1 className="text-4xl font-extrabold text-indigo-700 font-serif">
@@ -108,7 +113,6 @@ export default function Login({ onLogin, onSwitchToRegister, onBackToSource }) {
             <p className="text-lg text-gray-600 mt-2">Welcome Back 👋</p>
           </div>
 
-          {/* Login form OR Password reset form */}
           {!resetMode ? (
             <>
               <form onSubmit={handleLogin} className="space-y-4">
@@ -151,9 +155,36 @@ export default function Login({ onLogin, onSwitchToRegister, onBackToSource }) {
                 {error && <p className="text-red-500 text-sm">{error}</p>}
                 <button
                   type="submit"
-                  className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                  disabled={isLoading}
+                  className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Login
+                  {isLoading ? (
+                    <span className="flex items-center justify-center">
+                      <svg
+                        className="animate-spin h-5 w-5 mr-2 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8v8z"
+                        ></path>
+                      </svg>
+                      Logging in...
+                    </span>
+                  ) : (
+                    "Login"
+                  )}
                 </button>
               </form>
 
