@@ -12,6 +12,7 @@ from io import BytesIO
 from fastapi.middleware.cors import CORSMiddleware
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from reportlab.lib.utils import simpleSplit
 from starlette.responses import StreamingResponse
 from typing import Dict, Optional, List
 from model_utils import (
@@ -220,17 +221,17 @@ async def generate_report(report: ReportRequest):
     c.drawString(50, y, "Heartbeat Timing Summary")
     y -= 18
     c.setFont("Helvetica", 10)
-    c.drawString(50, y, "• mean_rr: Average time between two heartbeats in milliseconds.")
+    c.drawString(50, y, "• Mean RRI: Average time between two heartbeats in milliseconds.")
     y -= 14
-    c.drawString(50, y, "• estimated_hr_bpm: Approximate heart rate (beats per minute) computed from RR intervals.")
+    c.drawString(50, y, "• Estimated HR BPM: Approximate heart rate (beats per minute) computed from RR intervals.")
     y -= 20
 
     c.setFont("Helvetica", 11)
     for key, value in report.rr_features.items():
         if key == "mean_rr":
-            text = f"mean_rr: {value:.2f} ms"
+            text = f"Mean RRI: {value:.2f} ms"
         elif key == "estimated_hr_bpm":
-            text = f"estimated_hr_bpm: {value:.2f} bpm"
+            text = f"Estimated HR BPM: {value:.2f} bpm"
         else:
             text = f"{key}: {value:.4f}"
 
@@ -265,28 +266,44 @@ async def generate_report(report: ReportRequest):
     if report.task_type == "early_prediction":
         if p >= 0.53:
             prob_text = "This record is classified as high risk for early AF onset."
-            comment_text = "Closer monitoring is recommended, with consideration of clinical evaluation where appropriate."
         else:
             prob_text = "This record is classified as low risk for early AF onset."
-            comment_text = "No elevated early risk indicated. Routine monitoring and general health awareness remain advisable."
     else:
         if p >= 0.65:
             prob_text = "AF is detected in this recording."
-            comment_text = "Findings are consistent with atrial fibrillation. Clinical evaluation is recommended."
         else:
-            prob_text = "No AF Detected."
-            comment_text = "No atrial fibrillation detected in this recording. Routine monitoring is suggested."
+            prob_text = "No AF detected in this recording."
 
     c.drawString(60, y, prob_text)
     y -= 16
     c.drawString(60, y, rr_text)
     y -= 16
     c.drawString(60, y, hr_text)
-    y -= 16
+    y -= 50
 
-    c.setFont("Helvetica-Oblique", 10)
-    c.drawString(60, y, comment_text)
-    y -= 24
+    # Suggested Next Steps Section
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(50, y, "Suggested Next Steps")
+    y -= 20
+
+    c.setFont("Helvetica", 11)
+    if report.task_type == "early_prediction":
+        if p >= 0.53:
+            suggestion_text = "Please consult a healthcare provider for monitoring and further evaluation. Closer clinical assessment is recommended for high-risk cases."
+        else:
+            suggestion_text = "Continue regular monitoring and maintain a healthy lifestyle. Routine health awareness and preventive care remain advisable."
+    else:
+        if p >= 0.65:
+            suggestion_text = "Please consult a healthcare provider for further evaluation. Clinical assessment and treatment discussion are recommended for atrial fibrillation."
+        else:
+            suggestion_text = "Continue regular monitoring and maintain a healthy lifestyle. Routine follow-up as recommended by your healthcare provider."
+
+    # Use proper text wrapping to avoid breaking words
+    suggestion_lines = simpleSplit(suggestion_text, "Helvetica", 11, 480)
+    for line in suggestion_lines:
+        c.drawString(60, y, line)
+        y -= 16
+    
     c.setFont("Helvetica", 11)
 
     y -= 16 

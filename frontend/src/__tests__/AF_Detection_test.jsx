@@ -42,7 +42,7 @@ function uploadH5Files(files) {
 // Renders the upload field
 test("renders upload input", () => {
   render(<AFDetection user={{ uid: "u1" }} />);
-  expect(screen.getByText(/RRI Data Files/i)).toBeInTheDocument();
+  expect(screen.getByText(/RRI Data File/i)).toBeInTheDocument();
   const fileInput = document.querySelector("input[type='file']");
   expect(fileInput).toHaveAttribute("accept", ".h5");
   expect(fileInput).toHaveAttribute("multiple");

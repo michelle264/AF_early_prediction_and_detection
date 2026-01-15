@@ -77,7 +77,7 @@ export default function Homepage({ user, onNavigate }) {
               <div className="p-6 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <h3 className="text-xl font-semibold mb-3">1. Upload Data</h3>
                 <p className="text-gray-600">
-                  Users upload <strong>record.zip</strong> files containing RR interval (RRI) data (hdf5) and RRI annotations (csv).
+                  Users upload <strong>RR interval (RRI) data (hdf5)</strong> file(s).
                 </p>
               </div>
 

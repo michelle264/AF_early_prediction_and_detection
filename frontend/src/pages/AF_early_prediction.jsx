@@ -46,7 +46,7 @@ export default function UploadAnalysis({ user }) {
   useEffect(() => {
     if (risk === "Risky") {
       new Notification("⚠️ High AFib Risk Detected!", {
-        body: "Probability of danger is high. Please consult a clinician immediately.",
+        body: "Probability of danger is high. Continued monitoring and medical consultation are recommended.",
       });
       setShowModal(true);
     }
@@ -194,7 +194,7 @@ export default function UploadAnalysis({ user }) {
     }
   };
 
-  const { probText, meanRRText, hrText } =
+  const { probText, meanRRText, hrText, suggestionText } =
     rrFeatures ? interpretRRFeatures(rrFeatures, probability, "early_prediction") : {};
 
   return (
@@ -295,11 +295,33 @@ export default function UploadAnalysis({ user }) {
                 </p>
               </div>
 
-              <p className="text-gray-700 mt-4 text-center">
-                {risk === "Risky"
-                  ? "⚠️ Probability of danger is high. Please consult a clinician immediately."
-                  : "Normal pattern detected. Keep maintaining a healthy lifestyle."}
-              </p>
+              {probability !== null && (
+                <div
+                  className={`mt-5 px-5 py-3 rounded-lg w-full max-w-md mx-auto text-center ${
+                    risk === "Risky" ? "bg-red-50" : "bg-green-50"
+                  }`}
+                >
+                  <p
+                    className={`font-semibold ${
+                      risk === "Risky" ? "text-red-700" : "text-green-700"
+                    }`}
+                  >
+                    {risk === "Risky"
+                      ? "⚠️ Probability of danger is high."
+                      : "Normal pattern detected."}
+                  </p>
+
+                  <p
+                    className={`mt-2 text-sm ${
+                      risk === "Risky" ? "text-red-600" : "text-green-600"
+                    }`}
+                  >
+                    {risk === "Risky"
+                      ? "Please consult a healthcare provider for monitoring and further evaluation."
+                      : "Continue regular monitoring and maintain a healthy lifestyle."}
+                  </p>
+                </div>
+              )}
 
               {rrFeatures && <RRFeaturesCard rr={rrFeatures} />}
               {rrFeatures && (
@@ -307,6 +329,7 @@ export default function UploadAnalysis({ user }) {
                   probText={probText}
                   meanRRText={meanRRText}
                   hrText={hrText}
+                  suggestionText={suggestionText}
                 />
               )}
               {rrFeatures && (
@@ -331,7 +354,7 @@ export default function UploadAnalysis({ user }) {
         </div>
       </div>
 
-      {/* Modal for High Risk */}
+      {/* High Risk Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md text-center">
@@ -346,7 +369,7 @@ export default function UploadAnalysis({ user }) {
               .
             </p>
             <p className="text-gray-700 mb-6">
-              Probability of danger is high. Please consult a clinician immediately.
+              Please consult a healthcare provider for monitoring and further evaluation.
             </p>
             <button
               onClick={() => setShowModal(false)}

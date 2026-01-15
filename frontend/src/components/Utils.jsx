@@ -22,18 +22,18 @@ export function validateRRFiles(files) {
 
   // Check if all files have valid record ID format
   if (recordIds.some(id => id === null)) {
-    return { 
-      valid: false, 
-      error: "Invalid filename format! Files must be named like: record_{record_id}_rr_{index}.h5" 
+    return {
+      valid: false,
+      error: "Invalid filename format! Files must be named like: record_{record_id}_rr_{index}.h5"
     };
   }
 
   // Check if all files belong to the same record
   const uniqueRecordIds = [...new Set(recordIds)];
   if (uniqueRecordIds.length > 1) {
-    return { 
-      valid: false, 
-      error: `All files must be from the same record! Found: ${uniqueRecordIds.join(", ")}` 
+    return {
+      valid: false,
+      error: `All files must be from the same record! Found: ${uniqueRecordIds.join(", ")}`
     };
   }
 
@@ -58,11 +58,11 @@ export function interpretRRFeatures(rr, probability, taskType) {
     probText =
       probability >= 53 ? (
         <>
-          The model flags this segment as <strong>high danger</strong> risk based on RR patterns.
+          This segment is flagged as <strong>high danger</strong> risk based on RR patterns.
         </>
       ) : (
         <>
-          The model flags this segment as <strong>low danger</strong> risk based on RR patterns.
+          This segment is flagged as <strong>low danger</strong> risk based on RR patterns.
         </>
       );
   }
@@ -86,6 +86,8 @@ export function interpretRRFeatures(rr, probability, taskType) {
       : "Average RR interval could not be computed.";
 
   let hrText = "";
+  let suggestionText = "";
+  
   if (typeof estimated_hr_bpm === "number") {
     if (estimated_hr_bpm < 60) {
       hrText = `Estimated heart rate is ${estimated_hr_bpm.toFixed(
@@ -104,7 +106,22 @@ export function interpretRRFeatures(rr, probability, taskType) {
     hrText = "Heart rate could not be estimated from RR intervals.";
   }
 
-  return { probText, meanRRText, hrText };
+  // Generate suggestion based on risk probability
+  if (taskType === "early_prediction") {
+    if (probability >= 53) {
+      suggestionText = "High danger risk detected. Consider consulting a healthcare provider for further evaluation and monitoring of your heart rhythm.";
+    } else {
+      suggestionText = "Low danger risk. Continue routine monitoring and maintain a healthy lifestyle.";
+    }
+  } else if (taskType === "af_detection") {
+    if (probability >= 65) {
+      suggestionText = "AF detected. Seek medical evaluation promptly to discuss treatment options and prevent potential complications.";
+    } else {
+      suggestionText = "No AF detected. Continue regular health check-ups and monitor your heart health as recommended by your healthcare provider.";
+    }
+  }
+
+  return { probText, meanRRText, hrText, suggestionText };
 }
 
 // RR Feature Display Card
@@ -123,7 +140,7 @@ export function RRFeaturesCard({ rr }) {
         {"mean_rr" in rr && (
           <div className="bg-white p-4 rounded-xl shadow flex flex-col items-center text-center">
             <p className="text-sm text-gray-500 uppercase tracking-wide">
-              MEAN_RR
+              MEAN RRI
             </p>
 
             <p className="text-2xl font-semibold text-blue-700">
@@ -140,7 +157,7 @@ export function RRFeaturesCard({ rr }) {
         {"estimated_hr_bpm" in rr && (
           <div className="bg-white p-4 rounded-xl shadow flex flex-col items-center text-center">
             <p className="text-sm text-gray-500 uppercase tracking-wide">
-              ESTIMATED_HR_BPM
+              ESTIMATED HR BPM
             </p>
 
             <p className="text-2xl font-semibold text-blue-700">
@@ -159,16 +176,23 @@ export function RRFeaturesCard({ rr }) {
 }
 
 // Summary Block
-export function RRSummaryBlock({ probText, meanRRText, hrText }) {
+export function RRSummaryBlock({ probText, meanRRText, hrText, suggestionText }) {
   return (
     <div className="mt-4 bg-white rounded-lg shadow p-4 text-sm text-gray-700 space-y-2">
       <p className="text-gray-500 text-sm mt-3 font-bold">
-        *Heart-rate values are shown only for context. The model’s predictions are based solely on PSR features, which represent the irregularity patterns in RR intervals.*
+        *Heart-rate values are shown only for context. The model's predictions are based solely on PSR features, which represent the irregularity patterns in RR intervals.*
       </p>
       <p>{probText}</p>
       <p>{meanRRText}</p>
       <p>{hrText}</p>
-
+      {suggestionText && (
+        <div className="mt-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
+          <p className="text-blue-800 font-medium text-sm">
+            💡 Suggested Next Step:
+          </p>
+          <p className="text-blue-700 text-sm mt-1">{suggestionText}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -254,11 +278,11 @@ export function FileUploadSection({ rrFiles, onFilesChange, onClearFiles, error 
   return (
     <div>
       <p className="text-sm font-semibold text-gray-700 mb-1 mt-4">
-        Upload Files
+        Upload File(s)
       </p>
       <div className="bg-gray-50 p-4 rounded-lg shadow-inner">
         <label className="block text-sm font-medium text-gray-600 mb-1">
-          RRI Data Files (.h5)
+          RRI Data File (.h5)
         </label>
         <input
           type="file"
@@ -292,7 +316,7 @@ export function FileUploadSection({ rrFiles, onFilesChange, onClearFiles, error 
 // Save record to Firestore
 export async function saveRecordToFirebase(db, auth, recordData) {
   const { collection, addDoc } = await import("firebase/firestore");
-  
+
   const record = {
     ...recordData,
     userId: auth?.currentUser?.uid || recordData.userId || null,

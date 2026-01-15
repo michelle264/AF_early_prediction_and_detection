@@ -58,7 +58,6 @@ export default function AFDetection({ user }) {
     if (!validation.valid) {
       setErrorMsg(validation.error);
       setRrFiles([]);
-      clearFileInput();
       return;
     }
 
@@ -197,7 +196,7 @@ export default function AFDetection({ user }) {
     }
   };
 
-  const { probText, meanRRText, hrText } =
+  const { probText, meanRRText, hrText, suggestionText } =
     rrFeatures ? interpretRRFeatures(rrFeatures, probabilities, "af_detection") : {};
 
   return (
@@ -312,6 +311,15 @@ export default function AFDetection({ user }) {
                       ? "AF is present in your uploaded records."
                       : "No AF detected in your uploaded records."}
                   </p>
+
+                  <p
+                    className={`mt-2 text-sm ${decision === "Yes" ? "text-red-600" : "text-green-600"
+                      }`}
+                  >
+                    {decision === "Yes"
+                      ? "Please consult a healthcare provider for further evaluation."
+                      : "Continue regular monitoring and maintain a healthy lifestyle."}
+                  </p>
                 </div>
               )}
 
@@ -321,6 +329,7 @@ export default function AFDetection({ user }) {
                   probText={probText}
                   meanRRText={meanRRText}
                   hrText={hrText}
+                  suggestionText={suggestionText}
                 />
               </div>
               {rrFeatures && <GenerateReportButton onGenerate={handleGenerateReport} />}
@@ -337,23 +346,28 @@ export default function AFDetection({ user }) {
         </div>
 
       </div>
+      {/* AF Detection Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md text-center transform transition-all scale-100 hover:scale-105">
-            <h2 className="text-2xl font-bold text-red-600 mb-4">⚠️ AF Detected!</h2>
-            <p className="text-gray-700 mb-4">
-              Your uploaded records indicate a high probability of Atrial Fibrillation (AF).
+          <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md text-center">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">
+              ⚠️ AF Detected!
+            </h2>
+            <p className="text-gray-800 text-lg font-semibold mb-2">
+              Your estimated probability of AF is{" "}
+              <span className="text-red-600 font-bold text-2xl">
+                {Math.round(
+                  probabilities.reduce((a, b) => a + b, 0) / probabilities.length
+                )}%
+              </span>
+              .
             </p>
-            <p className="text-lg font-semibold text-red-700 mb-6">
-              Probability of AF:{" "}
-              {Math.round(
-                probabilities.reduce((a, b) => a + b, 0) / probabilities.length
-              )}
-              %
+            <p className="text-gray-700 mb-6">
+              Please consult a healthcare provider for further evaluation and treatment options.
             </p>
             <button
               onClick={() => setShowModal(false)}
-              className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition"
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg shadow-md"
             >
               Close
             </button>
