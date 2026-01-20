@@ -270,7 +270,7 @@ export default function UploadAnalysis({ user }) {
 
           {/* Result */}
           {risk && !loading && (
-            <div className="bg-gray-50 rounded-xl shadow-lg p-6 mt-6 transition-all duration-500 ease-in-out transform scale-105">
+            <div className="bg-gray-50 rounded-xl shadow-lg p-6 mt-6 mb-8 transition-all duration-500 ease-in-out">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-800">Result</h3>
                 <span
